@@ -47,6 +47,8 @@
     bc.v  = U[bc.idM + 1 * offset];                                      \
     bc.w  = U[bc.idM + 2 * offset];                                      \
     bc.wrk = W;                                                          \
+    bc.tke = tke[bc.idM];                                                \
+    bc.tau = tau[bc.idM];                                                \
     dfloat TRx = 0;                                                      \
     dfloat TRy = 0;                                                      \
     dfloat TRz = 0;                                                      \
@@ -83,6 +85,8 @@
                                        @restrict const dfloat*  z,
                                        @restrict const dfloat*  W,
                                        @restrict const dfloat*  U,
+				       @restrict const dfloat* tke,
+				       @restrict const dfloat* tau,
                                        @restrict dfloat*  rhsU)
 {
   for(dlong e = 0; e < Nelements; ++e; @outer(0)) {

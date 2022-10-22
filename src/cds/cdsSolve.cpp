@@ -1,6 +1,7 @@
 #include <limits>
 #include "nrs.hpp"
 #include "linAlg.hpp"
+#include "plugins/RANSktau.hpp"
 
 occa::memory cdsSolve(const int is, cds_t* cds, dfloat time, int stage)
 {
@@ -14,6 +15,9 @@ occa::memory cdsSolve(const int is, cds_t* cds, dfloat time, int stage)
 
   occa::memory o_Si = cds->o_S.slice(cds->fieldOffsetScan[is] * sizeof(dfloat), cds->fieldOffset[is] * sizeof(dfloat));
 
+  occa::memory o_k = RANSktau::o_k_t();
+  occa::memory o_tau = RANSktau::o_tau_t();
+  
   platform->o_mempool.slice1.copyFrom(cds->o_BF, cds->fieldOffset[is] * sizeof(dfloat), 0,  cds->fieldOffsetScan[is] * sizeof(dfloat));
   cds->helmholtzRhsBCKernel(mesh->Nelements,
                             mesh->o_sgeo,
@@ -28,6 +32,8 @@ occa::memory cdsSolve(const int is, cds_t* cds, dfloat time, int stage)
                             o_Si,
                             cds->o_EToB[is],
                             *(cds->o_usrwrk),
+			    o_k,
+			    o_tau,
                             platform->o_mempool.slice1);
 
   platform->timer.toc("scalar rhs");  

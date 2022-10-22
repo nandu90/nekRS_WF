@@ -154,6 +154,14 @@ occa::memory RANSktau::o_mue_t()
 {
   return o_mut;
 }
+occa::memory RANSktau::o_k_t()
+{
+  return o_k;
+}
+occa::memory RANSktau::o_tau_t()
+{
+  return o_tau;
+}
 
 void RANSktau::updateSourceTerms()
 {

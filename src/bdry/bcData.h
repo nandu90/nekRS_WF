@@ -24,5 +24,6 @@ struct bcData
 
   dfloat meshu, meshv, meshw;
 
+  dfloat tke, tau;
   @globalPtr const dfloat* wrk;
 };

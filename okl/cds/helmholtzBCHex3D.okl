@@ -45,6 +45,8 @@
     bc.fieldOffset = offset;                                \
     bc.s = S[bc.idM];                                       \
     bc.wrk = W;                                             \
+    bc.tke = tke[bc.idM];                                   \
+    bc.tau = tau[bc.idM];                                   \
                                                             \
     const dfloat WsJ = sgeo[sk * p_Nsgeo + p_WSJID];        \
     const dlong bcType = EToB[face + p_Nfaces * e];         \
@@ -71,6 +73,8 @@
                                  @restrict const dfloat*  S,
                                  @restrict const int*  EToB,
                                  @restrict const dfloat*  W,
+			         @restrict const dfloat* tke,
+			         @restrict const dfloat* tau,
                                  @restrict dfloat*  rhsU)
 {
   for(dlong e = 0; e < Nelements; ++e; @outer(0)) {
