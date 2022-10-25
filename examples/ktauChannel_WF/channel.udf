@@ -46,9 +46,21 @@ void uservp(nrs_t *nrs, dfloat time, occa::memory o_U, occa::memory o_S,
 
 void UDF_LoadKernels(occa::properties& kernelInfo)
 {
+  // called from all ranks, so MPI collectives are O.K.
+  int maxRank = platform->comm.mpiRank;
+  MPI_Allreduce(MPI_IN_PLACE, &maxRank, 1, MPI_INT, MPI_MAX, platform->comm.mpiComm);
+  
+  setupAide &options = platform->options;
+  
+  options.getArgs("VISCOSITY", mueLam); 
+  options.getArgs("DENSITY", rho);
+  
+  kernelInfo["defines/p_rho"] = rho;
+  kernelInfo["defines/p_visc"] = mueLam;
+  RANSktau::buildKernel(kernelInfo);
+
   userfKernel = oudfBuildKernel(kernelInfo, "cfill");
   scalarScaledAddKernel = oudfBuildKernel(kernelInfo, "scalarScaledAdd");
-  RANSktau::buildKernel(kernelInfo);
 }
 
 void UDF_Setup(nrs_t *nrs)
@@ -60,10 +72,22 @@ void UDF_Setup(nrs_t *nrs)
   udf.uEqnSource = &userf;
   udf.sEqnSource = &userq;
 
-  const int scalarFieldStart = 1;
-  platform->options.getArgs("VISCOSITY", mueLam); 
-  platform->options.getArgs("DENSITY", rho); 
+  const int scalarFieldStart = 1;  
   RANSktau::setup(nrs, mueLam, rho, scalarFieldStart);
+
+  //Get wall distance from nek5000
+  double *ywd = (double *) nek::scPtr(1);
+  occa::memory o_ywd = platform->device.malloc(nrs->fieldOffset,sizeof(dfloat));
+  o_ywd.copyFrom(ywd,nrs->fieldOffset*sizeof(dfloat));
+
+  //Pass wall gradients via o_usrwrk
+  nrs->o_usrwrk = platform->device.malloc(3*nrs->fieldOffset,sizeof(dfloat));
+  nrs->gradientVolumeKernel(mesh->Nelements,
+			    mesh->o_vgeo,
+			    mesh->o_D,
+			    nrs->fieldOffset,
+			    o_ywd,
+			    nrs->o_usrwrk);
 }
 
 void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)

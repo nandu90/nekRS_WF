@@ -6,6 +6,7 @@
 #include "alignment.hpp"
 #include "bcMap.hpp"
 #include "bdry.hpp"
+#include "plugins/RANSktau.hpp"
 
 namespace {
 static dfloat constantFlowScale = 0.0;
@@ -541,7 +542,9 @@ void compute(nrs_t *nrs, double lengthScale, dfloat time) {
             nrs->wSolver->o_maskIds,
             o_RhsVel + 2 * nrs->fieldOffset * sizeof(dfloat));
     }
-
+    
+    occa::memory o_k = RANSktau::o_k_t();
+    occa::memory o_tau = RANSktau::o_tau_t();
     platform->linAlg->fill(nrs->NVfields * nrs->fieldOffset,
         -1.0*std::numeric_limits<dfloat>::max(),
         platform->o_mempool.slice3);
@@ -574,6 +577,8 @@ void compute(nrs_t *nrs, double lengthScale, dfloat time) {
           mesh->o_z,
           nrs->o_usrwrk,
           nrs->o_U,
+	  o_k,
+	  o_tau,
           platform->o_mempool.slice3);
 
       // take care of Neumann-Dirichlet shared edges across elements
