@@ -34,11 +34,12 @@ void standardWF(bcData *bc, dfloat *tr1, dfloat *tr2, dfloat *tauFlux)
   dfloat ut = bc->u - unormal*bc->nx;
   dfloat vt = bc->v - unormal*bc->ny;
   dfloat wt = bc->w - unormal*bc->nz;
-
+    
   //tangential velocity along tangent and bi-tangent
   dfloat ut1 = ut*bc->t1x + vt*bc->t1y + wt*bc->t1z;
   dfloat ut2 = ut*bc->t2x + vt*bc->t2y + wt*bc->t2z;
   dfloat uw = sqrt(ut1*ut1 + ut2*ut2);
+ 
 
   //wall-normal gradient
   dfloat ywdx = bc->wrk[bc->idM + 0*bc->fieldOffset];

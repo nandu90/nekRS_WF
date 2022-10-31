@@ -66,7 +66,7 @@ c-----------------------------------------------------------------------
      $     ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
       
       real ptA(3),ptB(3)
-
+      
       if(istep.eq.0)then
          call distf2(ywd,1,'shl','W  ',w1,w2,w3,w4,w5)
 c     call get_gradywd  !calculate gradients in nekRS

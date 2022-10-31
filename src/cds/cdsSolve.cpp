@@ -34,6 +34,7 @@ occa::memory cdsSolve(const int is, cds_t* cds, dfloat time, int stage)
                             *(cds->o_usrwrk),
 			    o_k,
 			    o_tau,
+			    cds->o_U,
                             platform->o_mempool.slice1);
 
   platform->timer.toc("scalar rhs");  
