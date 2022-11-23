@@ -2,7 +2,9 @@
 polynomialOrder = 7
 #startFrom = channel.old
 stopAt = endTime
+#stopAt = numSteps
 endTime = 200
+#numSteps = 0
 dt = 2e-02
 timeStepper = tombo2
 

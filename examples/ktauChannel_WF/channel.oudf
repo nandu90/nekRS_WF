@@ -21,61 +21,6 @@
       Y[n] = a + b * X[n];
 }
 
-void standardWF(bcData *bc, dfloat *tr1, dfloat *tr2, dfloat *tauFlux)
-{
-  const dfloat yplus = 30.0;
-  const dfloat Econ = 9.0;
-  const dfloat kappa = 0.4;
-  const dfloat sCmu = 0.3;
-  dfloat Ccon = log(Econ)/kappa;
-  
-  //get tangential velocity
-  dfloat unormal = bc->u*bc->nx + bc->v*bc->ny + bc->w*bc->nz;
-  dfloat ut = bc->u - unormal*bc->nx;
-  dfloat vt = bc->v - unormal*bc->ny;
-  dfloat wt = bc->w - unormal*bc->nz;
-    
-  //tangential velocity along tangent and bi-tangent
-  dfloat ut1 = ut*bc->t1x + vt*bc->t1y + wt*bc->t1z;
-  dfloat ut2 = ut*bc->t2x + vt*bc->t2y + wt*bc->t2z;
-  dfloat uw = sqrt(ut1*ut1 + ut2*ut2);
- 
-
-  //wall-normal gradient
-  dfloat ywdx = bc->wrk[bc->idM + 0*bc->fieldOffset];
-  dfloat ywdy = bc->wrk[bc->idM + 1*bc->fieldOffset];
-  dfloat ywdz = bc->wrk[bc->idM + 2*bc->fieldOffset];
-  dfloat ydn = ywdx*bc->nx + ywdy*bc->ny + ywdz*bc->nz;
-
-  dfloat sgnydn = 1.0;
-  if(ydn < 0.0){
-    sgnydn = -1.0;
-  }
-  
-  dfloat uplus = (1./kappa)*log(Econ*yplus);
-
-  //G-M approach
-  dfloat utau1 = uw/uplus;
-  dfloat utau2 = sqrt(sCmu*bc->tke);
-  dfloat utau = max(utau1,utau2);
-  
-  //Traction
-  dfloat tw1 = (ut1/uplus)*utau*p_rho;
-  dfloat tw2 = (ut2/uplus)*utau*p_rho;
-  *(tr1) = -tw1;
-  *(tr2) = -tw2;
-  
-  //Flux of tau
-  dfloat veddy = kappa*p_visc*yplus;
-  dfloat factro = 0.5 + p_visc/veddy;
-  dfloat flux_tau = 0.0;
-  if(utau!=0){
-    flux_tau = bc->tke*bc->tau*kappa*sCmu*factro/utau;
-  }
-  flux_tau = flux_tau*sgnydn;
-  *(tauFlux) = flux_tau;
-}
-
 void scalarDirichletConditions(bcData *bc)
 {
   bc->s = 0;
@@ -83,21 +28,16 @@ void scalarDirichletConditions(bcData *bc)
 
 void velocityNeumannConditions(bcData *bc)
 {
-  dfloat tr1, tr2, tauFlux;
-  standardWF(bc,&tr1,&tr2,&tauFlux);
   bc->trn = 0.0;
-  bc->tr1 = tr1;
-  bc->tr2 = tr2;
-  
+  bc->tr1 = bc->wrk[bc->idM + 0*bc->fieldOffset];
+  bc->tr2 = bc->wrk[bc->idM + 1*bc->fieldOffset];
 }
 
 void scalarNeumannConditions(bcData *bc)
 {
-  dfloat tr1, tr2, tauFlux;
-  standardWF(bc,&tr1,&tr2,&tauFlux); 
   if(bc->scalarId == 0) bc->flux = 0.0;          //temp
   if(bc->scalarId == 1) bc->flux = 0.0;          //tke 
-  if(bc->scalarId == 2) bc->flux = tauFlux;      //tau
+  if(bc->scalarId == 2) bc->flux = bc->wrk[bc->idM + 2*bc->fieldOffset];  //tau
 }
 
 

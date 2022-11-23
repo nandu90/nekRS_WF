@@ -2,7 +2,6 @@
 #include "udf.hpp"
 #include "linAlg.hpp"
 #include <limits>
-#include "plugins/RANSktau.hpp"
 
 namespace tombo
 {
@@ -170,9 +169,6 @@ occa::memory velocitySolve(nrs_t* nrs, dfloat time, int stage)
     -1.0,
     platform->o_mempool.slice0);
 
-  occa::memory o_k = RANSktau::o_k_t();
-  occa::memory o_tau = RANSktau::o_tau_t();
-  
   nrs->velocityNeumannBCKernel(mesh->Nelements,
                                nrs->fieldOffset,
                                mesh->o_sgeo,
@@ -185,8 +181,6 @@ occa::memory velocitySolve(nrs_t* nrs, dfloat time, int stage)
                                mesh->o_z,
                                nrs->o_usrwrk,
                                nrs->o_U,
-			       o_k,
-			       o_tau,
                                platform->o_mempool.slice0);
 
   flopCount += static_cast<double>(mesh->Nelements) * (3 * mesh->Np + 36 * mesh->Nq * mesh->Nq);
