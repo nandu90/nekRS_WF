@@ -31,6 +31,7 @@ static occa::kernel mueKernel;
 static occa::kernel wallFuncKernel;
 
 static bool setupCalled = 0;
+static bool wfSetupCalled = 0;
 
 static dfloat coeff[] = {
   0.6,                      // sigma_k
@@ -264,18 +265,7 @@ void RANSktau::setup(nrs_t* nrsIn, dfloat mueIn, dfloat rhoIn,
     cds->o_BFDiag = platform->device.malloc(cds->fieldOffsetSum,  sizeof(dfloat));
     platform->linAlg->fill(cds->fieldOffsetSum, 0.0, cds->o_BFDiag);
   }
-
-  //Store wall distance and its gradients
-  o_ywd = platform->device.malloc(nrs->fieldOffset,sizeof(dfloat));
-  o_ywd.copyFrom(nrs->o_usrwrk,nrs->fieldOffset*sizeof(dfloat));
   
-  o_ywdgrad = platform->device.malloc(3*nrs->fieldOffset,sizeof(dfloat));
-  nrs->gradientVolumeKernel(mesh->Nelements,
-			    mesh->o_vgeo,
-			    mesh->o_D,
-			    nrs->fieldOffset,
-			    o_ywd,
-			    o_ywdgrad);
   setupCalled = 1;
 }
 
@@ -284,12 +274,32 @@ void RANSktau::updateWallFunc()
   mesh_t* mesh = nrs->meshV;
   cds_t* cds = nrs->cds;
 
+  if(wfSetupCalled == 0){
+    //Store wall distance and its gradients
+    o_ywd = platform->device.malloc(nrs->fieldOffset,sizeof(dfloat));
+    o_ywd.copyFrom(nrs->o_usrwrk,nrs->fieldOffset*sizeof(dfloat));
+  
+    o_ywdgrad = platform->device.malloc(3*nrs->fieldOffset,sizeof(dfloat));
+    nrs->gradientVolumeKernel(mesh->Nelements,
+			      mesh->o_vgeo,
+			      mesh->o_D,
+			      nrs->fieldOffset,
+			      o_ywd,
+			      o_ywdgrad);
+    wfSetupCalled = 1;
+  }
+
+  platform->linAlg->fill(3*nrs->fieldOffset,0.0,nrs->o_usrwrk);
+
   wallFuncKernel(mesh->Nelements,
 		 nrs->fieldOffset,
 		 rho,
 		 mueLam,
+		 mesh->o_y,
 		 mesh->o_sgeo,
 		 mesh->o_vmapM,
+		 mesh->o_EToB,
+		 nrs->o_EToB,
 		 nrs->o_U,
 		 o_k,
 		 o_tau,

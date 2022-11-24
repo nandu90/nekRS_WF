@@ -4,7 +4,7 @@ polynomialOrder = 7
 stopAt = endTime
 #stopAt = numSteps
 endTime = 200
-#numSteps = 0
+#numSteps = 1
 dt = 2e-02
 timeStepper = tombo2
 
@@ -25,7 +25,7 @@ density = 1.0
 viscosity = -43500. 
 
 [TEMPERATURE]
-#solver = none
+solver = none
 boundaryTypeMap = f,I 
 residualTol = 1e-06
 rhoCp = 1.0

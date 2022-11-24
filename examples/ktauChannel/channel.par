@@ -1,6 +1,6 @@
 [GENERAL]
 polynomialOrder = 7
-#startFrom = "r.fld"+time=0
+startFrom = channel.old
 stopAt = endTime
 endTime = 200
 dt = 2e-02

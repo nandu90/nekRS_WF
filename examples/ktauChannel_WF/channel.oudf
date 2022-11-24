@@ -21,11 +21,6 @@
       Y[n] = a + b * X[n];
 }
 
-void scalarDirichletConditions(bcData *bc)
-{
-  bc->s = 0;
-}
-
 void velocityNeumannConditions(bcData *bc)
 {
   bc->trn = 0.0;

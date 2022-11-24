@@ -9,6 +9,10 @@ C     - forcing function for passive scalar (q)
 C     - general purpose routine for checking errors etc.        
 C
 c-----------------------------------------------------------------------
+      include "/home/nsaini/Nek5000/core/experimental/lineplot.f"
+      include "/home/nsaini/Nek5000/core/experimental/limits.f"
+      include "/home/nsaini/Nek5000/core/experimental/utilities.f"
+c-----------------------------------------------------------------------
       subroutine useric (ix,iy,iz,ieg)
       include 'SIZE'
       include 'TOTAL'
@@ -46,6 +50,18 @@ c-----------------------------------------------------------------------
       include 'SIZE'
       include 'TOTAL'
 
+      real ptA(3),ptB(3)
+
+      if(istep.eq.0)then
+         ptA(1) = 0.0
+         ptA(2) = -1.0
+         ptA(3) = 0.0
+         ptB(1) = 0.0
+         ptB(2) = 0.0
+         ptB(3) = 0.0
+
+        call lineplot(ptA,ptB,10001)
+      endif
       return
       end
 c-----------------------------------------------------------------------

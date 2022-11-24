@@ -18,29 +18,15 @@ c---------------------------------------------------------------------
       include 'TOTAL'
       include 'NEKUSE'
 
-      real kmax
-
-      Re    = 1/param(2)
-      kmax  = 3.9201E-03
-      omax  = 0.5
-
-      ux   = 1.0  
-      uy   = 0.0 
-      uz   = 0.0
-
-      yd = 1 + y
-      tau = 0.0
-      if(yd.ne.0) then
-         omeg = omax + 6./Re/0.075/yd**2
-         tau = 1/omeg
-      endif
-
+      ux = 1.0
+      uy = 0.0
+      uz = 0.0
       if (ifield.eq.2) then
          temp = 1.0
       elseif (ifield.eq.3) then
-         temp = kmax
+         temp = 0.01
       elseif (ifield.eq.4) then
-         temp = tau
+         temp = 0.2
       endif
 
       return
@@ -69,7 +55,6 @@ c-----------------------------------------------------------------------
       
       if(istep.eq.0)then
          call distf2(ywd,1,'shl','W  ',w1,w2,w3,w4,w5)
-c     call get_gradywd  !calculate gradients in nekRS
          nrs_scptr(1) = loc(ywd(1,1,1,1))
 
          ptA(1) = 0.0
@@ -145,26 +130,7 @@ c-----------------------------------------------------------------------
 
       return
       end
-c-----------------------------------------------------------------------
-      subroutine get_gradywd
-      include 'SIZE'
-      include 'TOTAL'
-      include 'RANS_KOMG'
-
-      common /gradywd/ ywdx(lx1,ly1,lz1,lelv),ywdy(lx1,ly1,lz1,lelv)
-     $                ,ywdz(lx1,ly1,lz1,lelv),ywdc(lx1,ly1,lz1,lelv)
-
-      ntot = lx1*ly1*lz1*lelv
-
-      call gradm1 (ywdx,ywdy,ywdz,   ywd)
-      call opcolv (ywdx,ywdy,ywdz,   bm1)
-      call opdssum(ywdx,ywdy,ywdz)
-      call opcolv (ywdx,ywdy,ywdz,binvm1)
-      call copy   (ywdc,ywd ,ntot)
-
-      return
-      end
-c-----------------------------------------------------------------------            
+c-----------------------------------------------------------------------    
       subroutine distf2(d,ifld,b1,b2,dmin,emin,xn,yn,zn)
 
 c     Generate a distance function to boundary with bc "b1" or "b2".

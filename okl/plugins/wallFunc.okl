@@ -37,9 +37,13 @@
     bc.t2y = sgeo[sk * p_Nsgeo + p_T2YID];				\
     bc.t2z = sgeo[sk * p_Nsgeo + p_T2ZID];				\
     bc.fieldOffset = offset;						\
+    bc.id  = EToBM[face + p_Nfaces * e];				\
+    bc.y  = y[bc.idM];							\
     bc.u  = U[bc.idM + 0 * offset];					\
     bc.v  = U[bc.idM + 1 * offset];					\
     bc.w  = U[bc.idM + 2 * offset];					\
+    const dfloat WsJ = sgeo[sk * p_Nsgeo + p_WSJID];			\
+    const dlong bcType = EToB[face + p_Nfaces * e];			\
     const dfloat kw = tke[bc.idM];					\
     const dfloat tauw = tau[bc.idM];					\
     const dfloat ywdx = ywdgrad[bc.idM + 0*offset];			\
@@ -48,10 +52,12 @@
     dfloat tw1 = 0.0;							\
     dfloat tw2 = 0.0;							\
     dfloat tau_flux = 0.0;						\
-    applyWallFunc(&bc,ywdx,ywdy,ywdz,kw,tauw,rho,mueLam,&tw1,&tw2,&tau_flux); \
-    W[bc.idM + 0*offset] = tw1;						\
-    W[bc.idM + 1*offset] = tw2;						\
-    W[bc.idM + 2*offset] = tau_flux;					\
+    if(bcType == 8) {							\
+      applyWallFunc(&bc,ywdx,ywdy,ywdz,kw,tauw,rho,mueLam,&tw1,&tw2,&tau_flux); \
+    }									\
+    W[bc.idM + 0*offset] += tw1;					\
+    W[bc.idM + 1*offset] += tw2;					\
+    W[bc.idM + 2*offset] += tau_flux;					\
   }
 
 void applyWallFunc(bcData *bc, 
@@ -119,8 +125,11 @@ void applyWallFunc(bcData *bc,
 		      const dlong offset,
 		      const dfloat rho,
 		      const dfloat mueLam,
+		      @restrict const dfloat* y,
 		      @restrict const dfloat* sgeo,
 		      @restrict const dlong* vmapM,
+		      @restrict const int*  EToBM,
+		      @restrict const int*  EToB,
 		      @restrict const dfloat* U,
 		      @restrict const dfloat* tke,
 		      @restrict const dfloat* tau,
@@ -128,62 +137,63 @@ void applyWallFunc(bcData *bc,
 		      @restrict dfloat* W)
 {
   for(dlong e = 0; e < Nelements; ++e; @outer(0)) {
-    
+    // for all face nodes of all elements
     // face 0
-    for(int j = 0; j < p_Nq; ++j; @inner(1)) 
+    for(int j = 0; j < p_Nq; ++j; @inner(1)) {
       for(int i = 0; i < p_Nq; ++i; @inner(0)) {
-	const dlong sk0 = e * p_Nfp * p_Nfaces + 0 * p_Nfp + i + j * p_Nq;
-	surfaceTerms(sk0,0,i,j);
+        const dlong sk0 = e * p_Nfp * p_Nfaces + 0 * p_Nfp + i + j * p_Nq;
+        surfaceTerms(sk0,0,i,j);
       }
-    
+    }
+
     @barrier("local");
-  
+        
     // face 5
     for(int j = 0; j < p_Nq; ++j; @inner(1))
       for(int i = 0; i < p_Nq; ++i; @inner(0)) {
         const dlong sk5 = e * p_Nfp * p_Nfaces + 5 * p_Nfp + i + j * p_Nq;
-	surfaceTerms(sk5,5,i,j);
+        surfaceTerms(sk5,5,i,j);
       }
-
+    
     @barrier("local");
-
+        
     // face 1
     for(int k = 0; k < p_Nq; ++k; @inner(1))
       for(int i = 0; i < p_Nq; ++i; @inner(0)) {
         const dlong sk1 = e * p_Nfp * p_Nfaces + 1 * p_Nfp + i + k * p_Nq;
-	surfaceTerms(sk1,1,i,k);
+        surfaceTerms(sk1,1,i,k);
       }
     
     @barrier("local");
-
+        
     // face 3
     for(int k = 0; k < p_Nq; ++k; @inner(1))
       for(int i = 0; i < p_Nq; ++i; @inner(0)) {
         const dlong sk3 = e * p_Nfp * p_Nfaces + 3 * p_Nfp + i + k * p_Nq;
-	surfaceTerms(sk3,3,i,k);
+        surfaceTerms(sk3,3,i,k);
       }
-
+    
     @barrier("local");
-
+        
     // face 2
     for(int k = 0; k < p_Nq; ++k; @inner(1))
       for(int j = 0; j < p_Nq; ++j; @inner(0)) {
         const dlong sk2 = e * p_Nfp * p_Nfaces + 2 * p_Nfp + j + k * p_Nq;
-	surfaceTerms(sk2,2,j,k);
+        surfaceTerms(sk2,2,j,k);
       }
-
+    
     @barrier("local");
-
+    
     // face 4
     for(int k = 0; k < p_Nq; ++k; @inner(1))
       for(int j = 0; j < p_Nq; ++j; @inner(0)) {
         const dlong sk4 = e * p_Nfp * p_Nfaces + 4 * p_Nfp + j + k * p_Nq;
-	surfaceTerms(sk4,4,j,k);
+        surfaceTerms(sk4,4,j,k);
       }
-
+    
     @barrier("local");
+       
   }
-  
 }
 		      
 #undef surfaceTerms  
