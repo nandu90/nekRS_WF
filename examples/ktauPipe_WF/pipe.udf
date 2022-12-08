@@ -1,0 +1,88 @@
+//
+// nekRS User Defined File
+//
+#include <math.h>
+#include "udf.hpp"
+#include "plugins/RANSktau.hpp"
+
+/* User Functions */
+
+static dfloat rho, mueLam;
+static occa::kernel userfKernel; 
+static occa::kernel scalarScaledAddKernel;
+
+void userf(nrs_t *nrs, dfloat time, occa::memory o_U, occa::memory o_FU)
+{
+  mesh_t* mesh = nrs->meshV;
+}
+
+void userq(nrs_t *nrs, dfloat time, occa::memory o_S, occa::memory o_FS)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds   = nrs->cds;
+
+  RANSktau::updateSourceTerms();
+  RANSktau::updateWallFunc();
+}
+
+void uservp(nrs_t *nrs, dfloat time, occa::memory o_U, occa::memory o_S,
+	      occa::memory o_UProp, occa::memory o_SProp)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds   = nrs->cds;
+  
+  RANSktau::updateProperties();
+
+  dfloat conductivity;
+  platform->options.getArgs("SCALAR00 DIFFUSIVITY", conductivity);
+  const dfloat Pr_t = 0.7;
+  occa::memory o_mue_t = RANSktau::o_mue_t();
+  occa::memory o_temp_mue = cds->o_diff + 0*cds->fieldOffset[0]*sizeof(dfloat);
+  scalarScaledAddKernel(mesh->Nlocal, conductivity, 1/Pr_t, o_mue_t, o_temp_mue); 
+}
+
+void UDF_LoadKernels(occa::properties& kernelInfo)
+{
+// called from all ranks, so MPI collectives are O.K.
+  int maxRank = platform->comm.mpiRank;
+  MPI_Allreduce(MPI_IN_PLACE, &maxRank, 1, MPI_INT, MPI_MAX, platform->comm.mpiComm);
+  
+  setupAide &options = platform->options;
+  
+  options.getArgs("VISCOSITY", mueLam); 
+  options.getArgs("DENSITY", rho);
+    
+  RANSktau::buildKernel(kernelInfo);
+
+  userfKernel = oudfBuildKernel(kernelInfo, "cfill");
+  scalarScaledAddKernel = oudfBuildKernel(kernelInfo, "scalarScaledAdd");
+}
+
+
+void UDF_Setup(nrs_t *nrs)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  udf.properties = &uservp;
+  udf.uEqnSource = &userf;
+  udf.sEqnSource = &userq;
+
+  //Get wall distance from nek5000
+  double *ywd = (double *) nek::scPtr(1);
+  //Need 3 arrays for wall functions
+  nrs->o_usrwrk = platform->device.malloc(3*nrs->fieldOffset,sizeof(dfloat));
+  //Temporarily store wall distance in o_usrwrk
+  nrs->o_usrwrk.copyFrom(ywd,nrs->fieldOffset*sizeof(dfloat));
+
+  const int scalarFieldStart = 1;  
+  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart);
+}
+
+void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
+{
+  if (nrs->isOutputStep) {
+    nek::ocopyToNek(time, tstep);
+    nek::userchk();
+  }
+}

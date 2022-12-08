@@ -1,0 +1,36 @@
+@kernel void cfill(const dlong Ntotal,
+                    const dlong offset,
+                    const dfloat CONST,
+                    @restrict dfloat * NU) 
+{
+  for(dlong n=0;n<Ntotal;++n;@tile(p_blockSize,@outer,@inner)){
+    if(n<Ntotal){
+      const dlong id = n + offset;
+      NU[id] = CONST;
+    }
+  }
+}
+@kernel void scalarScaledAdd(const dlong N,
+                             const dfloat a,
+                             const dfloat b,
+                             @restrict const dfloat* X,
+                             @restrict dfloat* Y)
+{
+  for(dlong n = 0; n < N; ++n; @tile(256,@outer,@inner))
+    if(n < N)
+      Y[n] = a + b * X[n];
+}
+
+void velocityNeumannConditions(bcData *bc)
+{
+  bc->trn = 0.0;
+  bc->tr1 = bc->wrk[bc->idM + 0*bc->fieldOffset];
+  bc->tr2 = bc->wrk[bc->idM + 1*bc->fieldOffset];
+}
+
+void scalarNeumannConditions(bcData *bc)
+{
+  if(bc->scalarId == 0) bc->flux = 0.0;          //temp
+  if(bc->scalarId == 1) bc->flux = 0.0;          //tke 
+  if(bc->scalarId == 2) bc->flux = bc->wrk[bc->idM + 2*bc->fieldOffset];  //tau
+}
