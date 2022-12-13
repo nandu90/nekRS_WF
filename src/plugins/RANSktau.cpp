@@ -18,6 +18,7 @@ static occa::memory o_mut;
 
 static occa::memory o_k;
 static occa::memory o_tau;
+static occa::memory o_ywd;
 
 static occa::kernel computeKernel;
 static occa::kernel SijOijKernel;
@@ -42,7 +43,9 @@ static dfloat coeff[] = {
   100.0,                    // fb_c2
   0.52,                     // alp_inf
   1e-8,                     // TINY
-  0                         // Pope correction
+  0,                        // Pope correction
+  0.01,                     // edd_frac_free
+  0.5                       // yw_lim
 };
 }
 
@@ -82,6 +85,10 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     kernelInfo["defines/p_tiny"]          = coeff[13];
   if(!kernelInfo.get<std::string>("defines/p_pope").size())
     kernelInfo["defines/p_pope"]          = coeff[14];
+  if(!kernelInfo.get<std::string>("defines/p_edd_frac_free").size())
+    kernelInfo["defines/p_edd_frac_free"]          = coeff[15];
+  if(!kernelInfo.get<std::string>("defines/p_ywlim").size())
+    kernelInfo["defines/p_ywlim"]          = coeff[16];
 
   const int verbose = platform->options.compareArgs("VERBOSE","TRUE") ? 1:0;
 
@@ -138,7 +145,7 @@ void RANSktau::updateProperties()
   occa::memory o_mue  = nrs->o_mue;
   occa::memory o_diff = cds->o_diff + cds->fieldOffsetScan[kFieldIndex] * sizeof(dfloat);
 
-  limitKernel(mesh->Nelements * mesh->Np, o_k, o_tau);
+  //limitKernel(mesh->Nelements * mesh->Np, o_k, o_tau);
   mueKernel(mesh->Nelements * mesh->Np,
             nrs->fieldOffset,
             rho,
@@ -198,7 +205,7 @@ void RANSktau::updateSourceTerms()
                    o_OiOjSk,
                    o_SijMag2);
 
-  limitKernel(mesh->Nelements * mesh->Np, o_k, o_tau);
+  //limitKernel(mesh->Nelements * mesh->Np, o_k, o_tau);
 
   computeKernel(mesh->Nelements,
                 nrs->cds->fieldOffset[kFieldIndex],
@@ -210,6 +217,7 @@ void RANSktau::updateSourceTerms()
                 o_tau,
                 o_SijMag2,
                 o_OiOjSk,
+		o_ywd,
                 o_BFDiag,
                 o_FS);
 }
@@ -243,6 +251,10 @@ void RANSktau::setup(nrs_t* nrsIn, dfloat mueIn, dfloat rhoIn,
     cds->o_BFDiag = platform->device.malloc(cds->fieldOffsetSum,  sizeof(dfloat));
     platform->linAlg->fill(cds->fieldOffsetSum, 0.0, cds->o_BFDiag);
   }
+
+  double *ywd = (double *) nek::scPtr(1);
+  o_ywd = platform->device.malloc(nrs->fieldOffset,sizeof(dfloat));
+  o_ywd.copyFrom(ywd,nrs->fieldOffset*sizeof(dfloat));
 
   setupCalled = 1;
 }
