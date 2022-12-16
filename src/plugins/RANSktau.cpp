@@ -44,8 +44,8 @@ static dfloat coeff[] = {
   0.52,                     // alp_inf
   1e-8,                     // TINY
   0,                        // Pope correction
-  0.01,                     // edd_frac_free
-  0.5                       // yw_lim
+  0.0,                      // edd_frac_free
+  0.0                       // yw_lim
 };
 }
 

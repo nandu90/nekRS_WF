@@ -116,12 +116,12 @@
           const dfloat tau = max(0.0,TAU[id]);
 
           const dfloat mu_t  = rho * p_alpinf_str * kk * tau;
-          dfloat itau = 0;
-          if(tau > 0) itau = 1 / tau;
+          dfloat itau = 0.0;
+          if(tau > 0.) itau = 1 / tau;
 
           dfloat sigd = p_sigd_min;
           dfloat f_beta_str = 1.0;
-          if (xk > 0) {
+          if (xk > 0.) {
             const dfloat xk3 = xk * xk * tau * tau;
             sigd = p_sigd_max;
             f_beta_str = (1.0 + p_fb_c1st * xk3) / (1.0 + p_fb_c2st * xk3);
@@ -134,7 +134,7 @@
 
           // compute source term for k
           const dfloat Y_k = rho * p_betainf_str * f_beta_str * Rfact / (tau+p_tiny);
-          const dfloat kSrc  = min(mu_t * stMag2 * Rfact, 10.0*Y_k*kk);
+          const dfloat kSrc  = min(mu_t * stMag2, 10.0*Y_k*kk);
           const dfloat kDiag = Y_k;
 
           // compute rource term for omega
