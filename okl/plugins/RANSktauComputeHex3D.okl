@@ -114,7 +114,10 @@
           const dfloat kk  = K[id];
           const dfloat tau = TAU[id];
 
-          const dfloat mu_t  = rho * p_alpinf_str * kk * tau;
+	  const dfloat taulim = sqrt(2. / 3. / stMag2);
+	  const dfloat taulimited = fmin(tau, taulim);
+          const dfloat mu_t  = rho * p_alpinf_str * kk * taulimited;
+	  
           dfloat itau = 0;
           if(tau > 0) itau = 1 / tau;
 

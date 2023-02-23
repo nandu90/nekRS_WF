@@ -8,6 +8,7 @@
                  const dfloat mueLam,
                  @restrict const dfloat* K,
                  @restrict const dfloat* TAU,
+		 @restrict const dfloat* STMAG2,
                  @restrict dfloat* MUET,
                  @restrict dfloat* MUE,
                  @restrict dfloat* DIFF)
@@ -16,7 +17,11 @@
     if(n < N) {
       const dfloat k   = K[n];
       const dfloat tau = TAU[n];
-      const dfloat mut = rho * p_alpinf_str * k * tau;
+      const dfloat stMag2 = STMAG2[n];
+      
+      const dfloat taulim = sqrt(2. / 3. / stMag2);
+      const dfloat taulimited = fmin(tau, taulim);
+      const dfloat mut = rho * p_alpinf_str * k * taulimited;
 
       MUET[n] = mut;
 

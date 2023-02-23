@@ -18,6 +18,7 @@ static occa::memory o_mut;
 
 static occa::memory o_k;
 static occa::memory o_tau;
+static occa::memory o_SijMag2;
 
 static occa::kernel computeKernel;
 static occa::kernel SijOijKernel;
@@ -144,6 +145,7 @@ void RANSktau::updateProperties()
             mueLam,
             o_k,
             o_tau,
+	    o_SijMag2,
             o_mut,
             o_mue,
             o_diff);
@@ -161,7 +163,6 @@ void RANSktau::updateSourceTerms()
   
 
   occa::memory o_OiOjSk  = platform->o_mempool.slice0;
-  occa::memory o_SijMag2 = platform->o_mempool.slice1;
   occa::memory o_SijOij  = platform->o_mempool.slice2;
 
   occa::memory o_FS      = cds->o_FS     + cds->fieldOffsetScan[kFieldIndex] * sizeof(dfloat);
@@ -239,7 +240,8 @@ void RANSktau::setup(nrs_t* nrsIn, dfloat mueIn, dfloat rhoIn,
   o_tau = cds->o_S + cds->fieldOffsetScan[kFieldIndex+1] * sizeof(dfloat);
 
   o_mut = platform->device.malloc(cds->fieldOffset[kFieldIndex] ,  sizeof(dfloat));
-
+  o_SijMag2 = platform->device.malloc(cds->fieldOffset[kFieldIndex] ,  sizeof(dfloat));
+  
   if(!cds->o_BFDiag.ptr()) {
     cds->o_BFDiag = platform->device.malloc(cds->fieldOffsetSum,  sizeof(dfloat));
     platform->linAlg->fill(cds->fieldOffsetSum, 0.0, cds->o_BFDiag);
