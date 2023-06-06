@@ -1,0 +1,11 @@
+@kernel void ktauBuoDiff(const dlong N,
+                         const dfloat lamDiff,
+                         @restrict const dfloat *mut,
+                         @restrict dfloat *diff)
+{
+  for (dlong n = 0; n < N; ++n; @tile(256, @outer, @inner)) {
+    if(n < N) {
+      diff[n] = lamDiff + p_iPrt * mut[n];
+    }
+  }
+}
