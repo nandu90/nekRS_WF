@@ -1,0 +1,73 @@
+//
+// nekRS User Defined File
+//
+#include "udf.hpp"
+#include "plugins/RANSktau.hpp"
+#include "plugins/RANSktauBuo.hpp"
+
+static dfloat rho, mueLam;
+
+#ifdef __okl__
+
+#include "cav.oudf"
+
+#endif
+
+void userf(nrs_t *nrs, dfloat time, occa::memory o_U, occa::memory o_FU)
+{
+  RANSbuo::updateForce(o_FU);
+}
+void userq(nrs_t *nrs, dfloat time, occa::memory o_S, occa::memory o_FS)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  RANSktau::updateSourceTerms();
+  RANSbuo::updateSourceTerms();
+}
+
+void uservp(nrs_t *nrs,
+            dfloat time,
+            occa::memory o_U,
+            occa::memory o_S,
+            occa::memory o_UProp,
+            occa::memory o_SProp)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  RANSktau::updateProperties();
+  RANSbuo::updateProperties();
+}
+
+void UDF_Setup0(MPI_Comm comm, setupAide &options)
+{
+}
+
+void UDF_Setup(nrs_t *nrs)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  udf.properties = &uservp;
+  udf.sEqnSource = &userq;
+  udf.uEqnSource = &userf;
+
+  const int scalarFieldStart = 1;
+  platform->options.getArgs("VISCOSITY", mueLam);
+  platform->options.getArgs("DENSITY", rho);
+
+  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart);
+  const dfloat Ri = 1.0;                                //Richardson Number
+  dfloat gvec[3] = {0.0, 1.0, 0.0};               //Gravity unit vector
+  RANSbuo::setup(nrs, mueLam, rho, scalarFieldStart, Ri, gvec);
+
+  nrs->o_usrwrk = platform->device.malloc(1*nrs->fieldOffset,sizeof(dfloat));
+
+  double *t1in = (double *) nek::scPtr(1);
+  nrs->o_usrwrk.copyFrom(t1in,mesh->Nlocal*sizeof(dfloat),0*nrs->fieldOffset*sizeof(dfloat));
+}
+
+void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
+{
+}

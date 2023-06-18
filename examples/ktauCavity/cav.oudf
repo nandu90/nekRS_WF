@@ -1,0 +1,13 @@
+void velocityDirichletConditions(bcData *bc)
+{
+  bc->u = 0.0;
+  bc->v = 0.0;
+  bc->w = 0.0;
+}
+void scalarDirichletConditions(bcData *bc)
+{
+  bc->s = 0;
+  if (bc->scalarId == 0) {
+    bc->s = bc->usrwrk[bc->idM];
+  }
+}
