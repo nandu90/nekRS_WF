@@ -37,6 +37,37 @@ c-----------------------------------------------------------------------
       include 'SIZE'
       include 'TOTAL'
       
+      common /postpro/ tavgs(lx1,ly1,lz1,lelt,6),
+     $                 sij(lx1,ly1,lz1,lelt,6),
+     $                 gradT(lx1,ly1,lz1,lelt,3),
+     $                 ifpostpro
+      real tavgs,sij,gradT
+      logical ifpostpro
+
+      real ptA(3),ptB(3)
+
+      nxyz = lx1*ly1*lz1
+      ntot = nxyz*nelt
+
+      if(ifpostpro)then
+        call copy(vx,tavgs(1,1,1,1,1),ntot)
+        call copy(vy,tavgs(1,1,1,1,2),ntot)
+        call copy(vz,tavgs(1,1,1,1,3),ntot)
+        call copy(t(1,1,1,1,1),tavgs(1,1,1,1,4),ntot)
+        call copy(t(1,1,1,1,2),tavgs(1,1,1,1,5),ntot)
+        call copy(t(1,1,1,1,3),tavgs(1,1,1,1,6),ntot)
+
+        ptA(1) = 0.0
+        ptA(2) = 0.5
+        ptA(3) = 0.0
+        ptB(1) = 1.0
+        ptB(2) = 0.5
+        ptB(3) = 0.0
+
+        call lineplot(ptA,ptB,10001)
+        call analysis
+      endif
+
       return
       end
 c-----------------------------------------------------------------------
@@ -92,11 +123,24 @@ c-----------------------------------------------------------------------
      $     t1in(lx1,ly1,lz1,lelv)
       real t1in
 
-      common /NRSSCPTR/ nrs_scptr(1)
+      common /NRSSCPTR/ nrs_scptr(4)
       integer*8 nrs_scptr
+
+      common /postpro/ tavgs(lx1,ly1,lz1,lelt,6),
+     $                 sij(lx1,ly1,lz1,lelt,6),
+     $                 gradT(lx1,ly1,lz1,lelt,3),
+     $                 ifpostpro
+      real tavgs,sij,gradT
+      logical ifpostpro
 
       call getWallTemp
       nrs_scptr(1) = loc(t1in(1,1,1,1))
+
+      nrs_scptr(2) = loc(tavgs(1,1,1,1,1))
+      nrs_scptr(3) = loc(sij(1,1,1,1,1))
+      nrs_scptr(4) = loc(gradT(1,1,1,1,1))
+      nrs_scptr(5) = loc(ifpostpro)
+      ifpostpro = .false.
 
       return
       end
@@ -350,3 +394,295 @@ c   f(y) = s(i) + sb(i)*(y-SYY(i)) + sc(i)*(y-SYY(i))**2 + sd(i)*(y-SYY(i))**3
       if (y.ge.SYY(npts)) Kin=fK(npts)
       return
       end
+c-----------------------------------------------------------------------
+      subroutine analysis
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      real ptA(3), ptB(3)
+      real Nu(lx1,ly1,lz1,lelv)
+      real uv(lx1,ly1,lz1,lelv)
+      real uT(lx1,ly1,lz1,lelv)
+      real vT(lx1,ly1,lz1,lelv)
+
+      integer ie,ifc,ix,iy,iz,i
+      integer kx1,kx2,ky1,ky2,kz1,kz2
+
+      real usn(3)
+      real Nuss,tx,ty,tz
+      integer nxyz,ntot
+
+      real mu_t
+      real rans_mut,Prt_buo
+
+      character*3 bcw
+      common /postpro/ tavgs(lx1,ly1,lz1,lelt,6),
+     $                 sij(lx1,ly1,lz1,lelt,6),
+     $                 gradT(lx1,ly1,lz1,lelt,3),
+     $                 ifpostpro
+      real tavgs,sij,gradT
+      logical ifpostpro
+
+      nxyz=lx1*ly1*lz1
+      ntot=nxyz*nelt
+
+      Prt_buo = 0.85
+
+      do ie=1,nelv
+        do i=1,lx1*ly1*lz1
+          mu_t = t(i,1,1,ie,2)*t(i,1,1,ie,3)
+          uT(i,1,1,ie) = (mu_t/Prt_buo)*gradT(i,1,1,ie,1)
+          vT(i,1,1,ie) = (mu_t/Prt_buo)*gradT(i,1,1,ie,2)
+          uv(i,1,1,ie) = -mu_t*2.0*sij(i,1,1,ie,4)
+        enddo
+      enddo
+
+      do ie=1,nelv
+        do ifc = 1,2*ndim
+          bcw = cbc(ifc,ie,1)
+          if(bcw .eq. 'W  ')then
+            CALL FACIND (KX1,KX2,KY1,KY2,KZ1,KZ2,lx1,ly1,lz1,ifc)
+            do iz = kz1,kz2
+              do iy = ky1,ky2
+                do ix = kx1,kx2
+                  call getSnormal(usn,ix,iy,iz,ifc,ie)
+                  tx = gradT(ix,iy,iz,ie,1)
+                  ty = gradT(ix,iy,iz,ie,2)
+                  tz = gradT(ix,iy,iz,ie,3)
+                  Nuss = tx*usn(1)+ty*usn(2)
+                  if(if3d) Nuss = Nuss+tz*usn(3)
+                  Nu(ix,iy,iz,ie) = Nuss
+                enddo
+              enddo
+            enddo
+          endif
+        enddo
+      enddo
+
+      !store Nu in pressure field
+      call copy(pr,Nu,ntot)
+
+      !Hot wall
+      ptA(1) = 0.0
+      ptA(2) = 0.0
+      ptA(3) = 0.0
+      ptB(1) = 0.0
+      ptB(2) = 1.0
+      ptB(3) = 0.0
+      call lineplot(ptA,ptB,10001)
+
+      !cold wall
+      ptA(1) = 1.0
+      ptA(2) = 0.0
+      ptA(3) = 0.0
+      ptB(1) = 1.0
+      ptB(2) = 1.0
+      ptB(3) = 0.0
+      call lineplot(ptA,ptB,10001)
+
+      !Bottom wall
+      ptA(1) = 0.0
+      ptA(2) = 0.0
+      ptA(3) = 0.0
+      ptB(1) = 1.0
+      ptB(2) = 0.0
+      ptB(3) = 0.0
+      call lineplot(ptA,ptB,10001)
+
+      !Top wall
+      ptA(1) = 0.0
+      ptA(2) = 1.0
+      ptA(3) = 0.0
+      ptB(1) = 1.0
+      ptB(2) = 1.0
+      ptB(3) = 0.0
+      call lineplot(ptA,ptB,10001)
+
+      !Mid-width
+      ptA(1) = 0.5
+      ptA(2) = 0.0
+      ptA(3) = 0.0
+      ptB(1) = 0.5
+      ptB(2) = 1.0
+      ptB(3) = 0.0
+      call lineplot(ptA,ptB,10001)
+
+      !Mid-height - uv,uT,vT
+      call copy(vx,uv,ntot)
+      call copy(t(1,1,1,1,1),uT,ntot)
+      call copy(t(1,1,1,1,2),vT,ntot)
+      ptA(1) = 0.0
+      ptA(2) = 0.5
+      ptA(3) = 0.0
+      ptB(1) = 1.0
+      ptB(2) = 0.5
+      ptB(3) = 0.0
+      call lineplot(ptA,ptB,10001)
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine lineplot(pt1,pt2,lpts)
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+
+      real pt1(ldim),pt2(ldim)
+      integer npts,lpts,iplot,ls
+
+      character*141 fname
+      character*10 ftail
+      character*14 afmt
+      character*10 rfmt
+      integer intp_h,i,j,nt,nfld
+      save intp_h
+      logical ifset,ifdo
+      real dx,pts(lhis,3)
+      real fwrk(lx1*ly1*lz1*lelt,ldim+1+ldimt)
+      real fpts(lhis*(ldim+1+ldimt))
+      real uout(lhis),vout(lhis),wout(lhis)
+      real prout(lhis),tout(lhis,ldimt)
+      character*4 outname(ldim+1+ldimt)
+
+      real rwrk(lhis,ldim+1)
+      integer iwrk(lhis,3)
+      save rwrk,iwrk
+
+      save ifdo,ifset
+      data ifdo /.true./
+      data ifset /.true./
+
+      save iplot
+      data iplot /1/
+
+
+      if(.not.ifdo) return
+
+      nt=lx1*ly1*lz1*nelt
+
+      npts=max(lpts,2)
+      if(npts.gt.lhis) then
+        if(nio.eq.0) write(*,*)
+     &       "Error in lineplot, recompile with lhis in SIZE >= ",npts
+        ifdo=.false.
+        return
+      endif
+     
+      call rzero(pts,npts*ndim)
+      do j=1,ndim 
+        pts(1,j)=pt1(j)
+        dx=(pt2(j)-pt1(j))/(real(npts-1))
+        do i=2,npts
+          pts(i,j)=pts(i-1,j)+dx
+        enddo
+      enddo
+
+      if(ifset)then
+        ifset=.false.
+        call interp_setup(intp_h,0.0,0,nelt)
+      endif
+
+      nfld=0
+      if(ifvo) then
+        write(outname(1),'(a4)')"VELX"
+        write(outname(2),'(a4)')"VELY"
+        call copy(fwrk(1,1),vx,nt)
+        call copy(fwrk(1,2),vy,nt)
+        nfld=2
+      endif
+      if(if3d.and.ifvo)then
+        nfld=nfld+1
+        write(outname(nfld),'(a4)')"VELZ"
+        call copy(fwrk(1,nfld),vz,nt)
+      endif
+      if(ifpo) then
+        nfld=nfld+1
+        write(outname(nfld),'(a4)')"PRES"
+        call copy(fwrk(1,nfld),pr,nt)
+      endif
+      if(ifheat) then
+        if(ifto) then
+          nfld=nfld+1
+          write(outname(nfld),'(a4)')"TEMP"
+          call copy(fwrk(1,nfld),t,nt)
+        endif
+        do i=1,ldimt-1
+          if(ifpsco(i)) then
+            nfld=nfld+1
+            write(outname(nfld),'(a2,i2)')"PS",i
+            call copy(fwrk(1,nfld),t(1,1,1,1,i+1),nt)
+          endif
+        enddo
+      endif
+
+      if(nfld.gt.0) then
+
+        if(nid.ne.0) npts=0
+
+        call blank(fname,141)
+        call blank(ftail,9)
+        if(iplot.lt.10) then
+          write(ftail,'(a,i1,a)') ".0000",iplot,".dat"
+        elseif(iplot.lt.100) then
+          write(ftail,'(a,i2,a)') ".000",iplot,".dat"
+        elseif(iplot.lt.1000) then
+          write(ftail,'(a,i3,a)') ".00",iplot,".dat"
+        elseif(iplot.lt.10000) then
+          write(ftail,'(a,i4,a)') ".0",iplot,".dat"
+        else
+          write(ftail,'(a,i5,a)') ".",iplot,".dat"
+        endif
+        fname=trim(session)//ftail
+
+        if(nio.eq.0) then
+          write(*,*)'   Writing line plot data to file ',fname
+          if(if3d)then
+            write(*,'(7x,3es15.6)')pt1(1),pt1(2),pt1(ldim)
+            write(*,'(7x,3es15.6)')pt2(1),pt2(2),pt2(ldim)
+          else
+            write(*,'(7x,2es15.6)')pt1(1),pt1(2)
+            write(*,'(7x,2es15.6)')pt2(1),pt2(2)
+          endif
+          write(*,*)
+        endif
+   
+        call interp_nfld(fpts,fwrk,nfld,pts(1,1),pts(1,2),pts(1,3),npts
+     &                                    ,iwrk,rwrk,lhis,.true.,intp_h)
+
+        call blank(afmt,14)
+        call blank(rfmt,10)
+        if(if3d) then
+          write(afmt,'(a1,i2,a11)')"(",nfld+3,"a16,es16.8)"
+          write(rfmt,'(a1,i2,a7)')"(",nfld+3,"es16.8)"
+        else
+          write(afmt,'(a1,i2,a11)')"(",nfld+2,"a16,es16.8)"
+          write(rfmt,'(a1,i2,a7)')"(",nfld+2,"es16.8)"
+        endif
+  
+        if(nio.eq.0) then
+          open(unit=10,file=fname,status='unknown',form='formatted')
+          if(if3d) then
+            write(10,afmt)"X","Y","Z",(outname(i),i=1,nfld),time
+          else
+            write(10,afmt)"X","Y",(outname(i),i=1,nfld),time
+          endif
+          do i=1,npts
+            if(if3d) then
+              write(10,rfmt)pts(i,1),pts(i,2),pts(i,3)
+     &                               ,(fpts(i+j),j=0,(npts*nfld-1),npts)
+            else
+              write(10,rfmt)pts(i,1),pts(i,2)
+     &                               ,(fpts(i+j),j=0,(npts*nfld-1),npts)
+            endif
+          enddo
+        endif
+  
+        close(10)
+  
+        iplot=iplot+1
+      endif
+
+      return
+      end
+c-----------------------------------------------------------------------

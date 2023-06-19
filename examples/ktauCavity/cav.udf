@@ -4,8 +4,12 @@
 #include "udf.hpp"
 #include "plugins/RANSktau.hpp"
 #include "plugins/RANSktauBuo.hpp"
+#include "plugins/tavg.hpp"
 
 static dfloat rho, mueLam;
+static bool postpro = true;
+static occa::memory o_avg;
+static int nAvgFields;
 
 #ifdef __okl__
 
@@ -59,15 +63,167 @@ void UDF_Setup(nrs_t *nrs)
 
   RANSktau::setup(nrs, mueLam, rho, scalarFieldStart);
   const dfloat Ri = 1.0;                                //Richardson Number
-  dfloat gvec[3] = {0.0, 1.0, 0.0};               //Gravity unit vector
+  dfloat gvec[3] = {0.0, -1.0, 0.0};               //Gravity unit vector
   RANSbuo::setup(nrs, mueLam, rho, scalarFieldStart, Ri, gvec);
 
   nrs->o_usrwrk = platform->device.malloc(1*nrs->fieldOffset,sizeof(dfloat));
 
   double *t1in = (double *) nek::scPtr(1);
   nrs->o_usrwrk.copyFrom(t1in,mesh->Nlocal*sizeof(dfloat),0*nrs->fieldOffset*sizeof(dfloat));
+
+	if(postpro){
+		o_avg = platform->device.malloc(6*nrs->fieldOffset*sizeof(dfloat));
+		auto o_u = o_avg.slice(0*nrs->fieldOffset*sizeof(dfloat),nrs->fieldOffset*sizeof(dfloat));
+		auto o_v = o_avg.slice(1*nrs->fieldOffset*sizeof(dfloat),nrs->fieldOffset*sizeof(dfloat));
+		auto o_w = o_avg.slice(2*nrs->fieldOffset*sizeof(dfloat),nrs->fieldOffset*sizeof(dfloat));
+		auto o_T = o_avg.slice(3*nrs->fieldOffset*sizeof(dfloat),nrs->fieldOffset*sizeof(dfloat));
+		auto o_k = o_avg.slice(4*nrs->fieldOffset*sizeof(dfloat),nrs->fieldOffset*sizeof(dfloat));
+		auto o_tau = o_avg.slice(5*nrs->fieldOffset*sizeof(dfloat),nrs->fieldOffset*sizeof(dfloat));
+
+		std::vector<std::vector<occa::memory>> tavgFields;
+		tavgFields.push_back({o_u});
+		tavgFields.push_back({o_v});
+		tavgFields.push_back({o_w});
+		tavgFields.push_back({o_T});
+		tavgFields.push_back({o_k});
+		tavgFields.push_back({o_tau});
+		nAvgFields = tavgFields.size();
+		tavg::setup(nrs,tavgFields);
+	}
+	else{
+		tavg::setup(nrs);
+	}
+}
+
+void setupAvg(nrs_t *nrs)
+{
+	mesh_t* mesh = nrs->meshV;
+	const auto fieldOffsetByte = nrs->fieldOffset * sizeof(dfloat);
+
+	auto o_uAvg = o_avg.slice(0*fieldOffsetByte, fieldOffsetByte);
+	auto o_ux = nrs->o_U.slice(0*fieldOffsetByte, fieldOffsetByte);
+	o_uAvg.copyFrom(o_ux, fieldOffsetByte);
+
+	auto o_vAvg = o_avg.slice(1*fieldOffsetByte, fieldOffsetByte);
+	auto o_uy = nrs->o_U.slice(1*fieldOffsetByte, fieldOffsetByte);
+	o_vAvg.copyFrom(o_uy, fieldOffsetByte);
+
+	auto o_wAvg = o_avg.slice(2*fieldOffsetByte, fieldOffsetByte);
+	auto o_uw = nrs->o_U.slice(2*fieldOffsetByte, fieldOffsetByte);
+	o_wAvg.copyFrom(o_uw, fieldOffsetByte);
+
+	auto o_TAvg = o_avg.slice(3*fieldOffsetByte, fieldOffsetByte);
+	auto o_T = nrs->cds->o_S.slice(0*fieldOffsetByte, fieldOffsetByte);
+	o_TAvg.copyFrom(o_T, fieldOffsetByte);
+
+	auto o_kAvg = o_avg.slice(4*fieldOffsetByte, fieldOffsetByte);
+	auto o_k = nrs->cds->o_S.slice(1*fieldOffsetByte, fieldOffsetByte);
+	o_kAvg.copyFrom(o_k, fieldOffsetByte);
+
+	auto o_tauAvg = o_avg.slice(5*fieldOffsetByte, fieldOffsetByte);
+	auto o_tau = nrs->cds->o_S.slice(2*fieldOffsetByte, fieldOffsetByte);
+	o_tauAvg.copyFrom(o_tau, fieldOffsetByte);
+}
+
+void getStrainRate(nrs_t* nrs, occa::memory& o_U, occa::memory& o_Sij)
+{
+	mesh_t *mesh = nrs->meshV;
+	nrsCheck(o_Sij.size() < (6*nrs->fieldOffset*sizeof(dfloat)),
+			MPI_COMM_SELF, EXIT_FAILURE, "o_Sij too small to store %d fields!\n", 6);
+
+	nrs->SijOijKernel(mesh->Nelements,
+										nrs->fieldOffset,
+										0,
+										1,
+										mesh->o_vgeo,
+										mesh->o_D,
+										o_U,
+										o_Sij);
+	
+	oogs::startFinish(o_Sij,
+										6,
+										nrs->fieldOffset,
+										ogsDfloat,
+										ogsAdd,
+										nrs->gsh);
+
+	platform->linAlg->axmyMany(mesh->Nlocal,
+														 6,
+														 nrs->fieldOffset,
+														 0,
+														 1.0,
+														 mesh->o_invLMM,
+														 o_Sij);
+}
+
+void getTempGrad(nrs_t* nrs, occa::memory& o_T, occa::memory& o_gradT)
+{
+	mesh_t *mesh = nrs->meshV;
+
+	nrs->gradientVolumeKernel(mesh->Nelements,
+														mesh->o_vgeo,
+														mesh->o_D,
+														nrs->fieldOffset,
+														o_T,
+														o_gradT);
+	oogs::startFinish(o_gradT, 3, nrs->fieldOffset, ogsDfloat, ogsAdd, nrs->gsh);
+
+	platform->linAlg->axmyMany(mesh->Nlocal,
+														 3,
+														 nrs->fieldOffset,
+														 0,
+														 1.0,
+														 mesh->o_invLMM,
+														 o_gradT);
 }
 
 void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
 {
+	mesh_t *mesh = nrs->meshV;
+	if(postpro){
+		setupAvg(nrs);
+	}
+	tavg::run(time);
+
+	if(nrs->isOutputStep){
+		if(postpro){
+			auto tAvg = (double*) nek::scPtr(2);
+			for(int ifld = 0; ifld < nAvgFields; ifld++) {
+				const auto offset = ifld*nekData.lelt*mesh->Np;
+				tavg::o_avg().copyTo(tAvg + offset, 
+						nrs->fieldOffset*sizeof(dfloat), 
+						ifld*nrs->fieldOffset*sizeof(dfloat));  
+			}
+			const auto fieldOffsetByte = nrs->fieldOffset * sizeof(dfloat);
+
+			//pass strain rate to usr
+			occa::memory &o_Sij = platform->o_mempool.slice0;
+			auto o_U = tavg::o_avg().slice(0*fieldOffsetByte, 3*fieldOffsetByte);
+			getStrainRate(nrs, o_U, o_Sij);
+			auto sij = (double*) nek::scPtr(3);
+			for(int ifld = 0; ifld < 6; ifld++) {
+				const auto offset = ifld*nekData.lelt*mesh->Np;
+				o_Sij.copyTo(sij + offset, 
+						nrs->fieldOffset*sizeof(dfloat), 
+						ifld*nrs->fieldOffset*sizeof(dfloat));  
+			}
+			//pass grad T to usr
+			occa::memory &o_gradT = platform->o_mempool.slice0;
+			auto o_T = tavg::o_avg().slice(3*fieldOffsetByte, fieldOffsetByte);
+			getTempGrad(nrs, o_T, o_gradT);
+			auto gradT = (double*) nek::scPtr(4);
+			for(int ifld = 0; ifld < 3; ifld++) {
+				const auto offset = ifld*nekData.lelt*mesh->Np;
+				o_gradT.copyTo(gradT + offset, 
+						nrs->fieldOffset*sizeof(dfloat), 
+						ifld*nrs->fieldOffset*sizeof(dfloat));  
+			}
+			auto ifpostpro = (bool*) nek::scPtr(5);
+			*ifpostpro = postpro;
+			nek::userchk();
+		}
+		else{
+			tavg::outfld();
+		}
+	}
 }

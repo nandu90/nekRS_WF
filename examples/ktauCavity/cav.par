@@ -1,18 +1,15 @@
-[OCCA]
-backend=serial
-
 [GENERAL]
 polynomialOrder = 7
-#startFrom = "r.fld"+time=0
-stopAt = endTime
-#stopAt = numSteps
-endTime = 50
-#numSteps = 1000
+#startFrom = cav.fld+time=0
+#stopAt = endTime
+stopAt = numSteps
+#endTime = 50
+numSteps = 100000
 dt = 1e-3
 timeStepper = tombo2
 
 writeControl = simulationTime 
-writeInterval = 1
+writeInterval = 100000
 
 [PROBLEMTYPE]
 equation = navierStokes+variableViscosity
@@ -27,21 +24,18 @@ density = 1.0
 viscosity = -47173. 
 
 [TEMPERATURE]
-#solver = none
 boundaryTypeMap = t 
 residualTol = 1e-06
 rhoCp = 1.0
 conductivity = -33493. 
 
 [SCALAR01] # k
-#solver = none
 boundaryTypeMap = t
 residualTol = 1e-08
 rho = 1.0
 diffusivity = -47173. 
 
 [SCALAR02] # tau
-#solver = none
 boundaryTypeMap = t
 residualTol = 1e-06
 rho = 1.0
