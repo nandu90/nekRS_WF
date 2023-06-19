@@ -7,9 +7,9 @@
 {
   for (dlong n = 0; n < N; ++n; @tile(256, @outer, @inner)) {
     if(n < N) {
-      FU[n + 0 * offset] = Ri * g[0] * T[n];
-      FU[n + 1 * offset] = Ri * g[1] * T[n];
-      FU[n + 2 * offset] = Ri * g[2] * T[n];
+      FU[n + 0 * offset] = -Ri * g[0] * T[n];
+      FU[n + 1 * offset] = -Ri * g[1] * T[n];
+      FU[n + 2 * offset] = -Ri * g[2] * T[n];
     }
   }
 }
