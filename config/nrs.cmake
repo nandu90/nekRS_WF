@@ -58,7 +58,6 @@ set(SRC
     src/plugins/tavg.cpp
     src/plugins/velRecycling.cpp
     src/plugins/RANSktau.cpp
-    src/plugins/RANSktauBuo.cpp
     src/plugins/lowMach.cpp
     src/plugins/lpm.cpp
     src/findpts/findpts.cpp

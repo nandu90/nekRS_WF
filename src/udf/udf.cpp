@@ -341,7 +341,6 @@ void udfBuild(const std::string& _udfFile, setupAide &options)
           {
             {"nekrs_tavg_hpp_"        , "tavg::buildKernel"},
             {"nekrs_RANSktau_hpp_"    , "RANSktau::buildKernel"},
-            {"nekrs_RANSktauBuo_hpp_"    , "RANSbuo::buildKernel"},
             {"nekrs_lowMach_hpp_"     , "lowMach::buildKernel"},
             {"nekrs_velRecycling_hpp_", "velRecycling::buildKernel"},
             {"nekrs_lpm_hpp_"         , "lpm_t::registerKernels"}
