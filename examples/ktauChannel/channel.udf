@@ -118,7 +118,12 @@ void UDF_Setup(nrs_t *nrs)
   platform->options.getArgs("VISCOSITY", mueLam);
   platform->options.getArgs("DENSITY", rho);
 
-  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart);
+  /* std::string model = "ktau"; // or "default" */
+  /* RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model); */
+
+  double *ywd = (double *) nek::scPtr(1);
+  std::string model = "sst";
+  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model, ywd);
 }
 
 void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
