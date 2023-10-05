@@ -55,7 +55,8 @@
         S_w0 = -rho * sigd *xk;
         G_wp = rho * p_alp_inf * tau * 2*stMag2;
 
-        S_tau = fmin(8.0 * mue * xtq, 4.0 * p_beta0 / 3.0);
+        const dfloat tau_max = 8.0 * p_beta0 / 3.0;
+        S_tau = fmin(8.0 * mue * xtq, tau_max);
         S_taup = 8.0 * rho * p_alpinf_str * kk * xtq * p_sigma_tau;	  
       }
       else if(mid == 1){
@@ -75,7 +76,8 @@
         S_w0 = -2.0 * rho * p_sigom2 * f11 * xk;
         G_wp = rho * gamma * tau * 2 * stMag2;
 
-        S_tau = fmin(8.0 * mue * xtq, 8.0 * beta / 3.0);
+        const dfloat tau_max = 8.0 * beta / 3.0;
+        S_tau = fmin(8.0 * mue * xtq, tau_max);
         S_taup = 8.0 * rho * kk * xtq * sigom;
       }
 
