@@ -1,11 +1,13 @@
-
-
 @kernel void mue(const dlong N,
                  const dlong offset,
+                 const dlong mid,
                  const dfloat rho,
                  const dfloat mueLam,
                  @ restrict const dfloat *K,
                  @ restrict const dfloat *TAU,
+                 @ restrict const dfloat *STMAG2,
+                 @ restrict const dfloat *XK,
+                 @ restrict const dfloat *YWD,
                  @ restrict dfloat *MUET,
                  @ restrict dfloat *MUE,
                  @ restrict dfloat *DIFF)
@@ -14,12 +16,29 @@
     if (n < N) {
       const dfloat k = K[n];
       const dfloat tau = TAU[n];
-      const dfloat mut = rho * p_alpinf_str * k * tau;
+
+      dfloat mut = 0.0;
+      if(mid == 0){
+        mut = rho * p_alpinf_str * k * tau;
+        DIFF[n + 0 * offset] = mueLam + p_sigma_k * mut;
+        DIFF[n + 1 * offset] = mueLam + p_sigma_tau * mut;
+      }
+      else if(mid == 1){
+        const dfloat yw = YWD[n];
+        const dfloat stmag2 = STMAG2[n];
+        const dfloat xk = XK[n];
+        dfloat f1 = 1.0;
+        SSTBlendingFunc(rho, mueLam, k, tau, stmag2, xk, yw, f1, mut);
+
+        const dfloat f11 = 1.0 - f1;
+        const dfloat sigk = f1 * p_sigma_k_SST + f11 * p_sigk2;
+        const dfloat sigom = f1 * p_sigma_tau + f11 * p_sigom2;
+        DIFF[n + 0 * offset] = mueLam + sigk * mut;
+        DIFF[n + 1 * offset] = mueLam + sigom * mut;
+      }
 
       MUET[n] = mut;
 
       MUE[n] = mueLam + mut;
-      DIFF[n + 0 * offset] = mueLam + p_sigma_k * mut;
-      DIFF[n + 1 * offset] = mueLam + p_sigma_tau * mut;
     }
 }
