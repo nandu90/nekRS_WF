@@ -26,11 +26,13 @@ static occa::memory o_xtq;
 static occa::memory o_OiOjSk;
 static occa::memory o_SijMag2;
 static occa::memory o_ywd;
+static occa::memory o_dgrd;
 
 static occa::kernel computeKernel;
 static occa::kernel computeGradKernel;
 static occa::kernel mueKernel;
 static occa::kernel limitKernel;
+static occa::kernel desFilterKernel;
   
 static occa::kernel SijMag2OiOjSkKernel;
 
@@ -149,6 +151,10 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     fileName = path + kernelName + extension;
     SijMag2OiOjSkKernel = platform->device.buildKernel(fileName, kernelInfo, true);
 
+    kernelName = "desFilter";
+    fileName = path + kernelName + extension;
+    desFilterKernel = platform->device.buildKernel(fileName, kernelInfo, true);
+
     const std::string headerFile = path + "RANSktauSSTBlendingFunc" + extension;
     kernelInfo["includes"] += headerFile.c_str();
     kernelName = "RANSktauComputeHex3D";
@@ -230,8 +236,9 @@ void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::st
 
   upperCase(model);
   if(model.compare("DEFAULT") == 0 || model.compare("KTAU") == 0) mid = 0;
-  if(model.compare("SST") == 0){
-    mid = 1;
+  if(model.compare("SST") == 0) mid = 1;
+  if(model.compare("SST+DES") == 0) mid = 2;
+  if(mid == 1 || mid == 2){
     if(o_ywd == o_NULL){
       printf("\nSST model requires wall distance\nCheck usage\n");
       exit(1);
@@ -261,7 +268,16 @@ void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::st
   o_xk = platform->device.malloc<dfloat>(cds->fieldOffset[kFieldIndex]);
   o_xt = platform->device.malloc<dfloat>(cds->fieldOffset[kFieldIndex]);
   o_xtq = platform->device.malloc<dfloat>(cds->fieldOffset[kFieldIndex]);
-
+  
+  if(mid == 2){
+    o_dgrd = platform->device.malloc<dfloat>(mesh->Nelements);
+    desFilterKernel(mesh->Nelements,
+                    nrs->fieldOffset,
+                    mesh->o_x,
+                    mesh->o_y,
+                    mesh->o_z,
+                    o_dgrd);
+  }
   setupCalled = 1;
 }
 
