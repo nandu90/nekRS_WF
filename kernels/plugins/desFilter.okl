@@ -16,13 +16,10 @@ void rmin(dfloat *s_min, const dlong t, const dlong bs) {
   for (dlong e = 0; e < Nelements; e++; @outer(0)) {
     const dlong Nblocks = (p_Np + p_blockSize - 1)/p_blockSize;
 
-    dfloat xmax, xmin, ymax, ymin, zmax, zmin;
-    dfloat n_xmax[Nblocks];
-    dfloat n_xmin[Nblocks];
-    dfloat n_ymax[Nblocks];
-    dfloat n_ymin[Nblocks];
-    dfloat n_zmax[Nblocks];
-    dfloat n_zmin[Nblocks];
+    const dfloat iporder = 1.0 / (p_Nq - 1.0); 
+
+    dgrd[e] = -1e10;
+
     for (dlong n = 0; n < Nblocks; n++) {
       @shared dfloat s_xmax[p_blockSize];
       @shared dfloat s_xmin[p_blockSize];
@@ -156,38 +153,23 @@ void rmin(dfloat *s_min, const dlong t, const dlong bs) {
 
       for (int t = 0; t < p_blockSize; ++t; @inner(0))
         if (t < 1) {
-          n_xmax[n] = (s_xmax[0] > s_xmax[1]) ? s_xmax[0] : s_xmax[1];
-          n_xmin[n] = (s_xmin[0] < s_xmin[1]) ? s_xmin[0] : s_xmin[1];
-          n_ymax[n] = (s_ymax[0] > s_ymax[1]) ? s_ymax[0] : s_ymax[1];
-          n_ymin[n] = (s_ymin[0] < s_ymin[1]) ? s_ymin[0] : s_ymin[1];
-          n_zmax[n] = (s_zmax[0] > s_zmax[1]) ? s_zmax[0] : s_zmax[1];
-          n_zmin[n] = (s_zmin[0] < s_zmin[1]) ? s_zmin[0] : s_zmin[1];
+          const dfloat xmax = (s_xmax[0] > s_xmax[1]) ? s_xmax[0] : s_xmax[1];
+          const dfloat xmin = (s_xmin[0] < s_xmin[1]) ? s_xmin[0] : s_xmin[1];
+          const dfloat ymax = (s_ymax[0] > s_ymax[1]) ? s_ymax[0] : s_ymax[1];
+          const dfloat ymin = (s_ymin[0] < s_ymin[1]) ? s_ymin[0] : s_ymin[1];
+          const dfloat zmax = (s_zmax[0] > s_zmax[1]) ? s_zmax[0] : s_zmax[1];
+          const dfloat zmin = (s_zmin[0] < s_zmin[1]) ? s_zmin[0] : s_zmin[1];
+
+          const dfloat dxgrd = (xmax - xmin) * iporder;
+          const dfloat dygrd = (ymax - ymin) * iporder;
+          const dfloat dzgrd = (zmax - zmin) * iporder;
+
+          const dfloat dd = fmax(dxgrd, dygrd);
+          const dfloat dd1 = fmax(dd, dzgrd);
+          dgrd[e] = fmax(dgrd[e], dd1);
         }
       @barrier();
     }
-
-    xmax = n_xmax[0];
-    xmin = n_xmin[0];
-    ymax = n_ymax[0];
-    ymin = n_ymin[0];
-    zmax = n_zmax[0];
-    zmin = n_zmin[0];
-    for (dlong n = 1; n < Nblocks; n++) {
-      xmax = (n_xmax[n] > xmax) ? n_xmax[n] : xmax;
-      xmin = (n_xmin[n] < xmin) ? n_xmin[n] : xmin;
-      ymax = (n_ymax[n] > ymax) ? n_ymax[n] : ymax;
-      ymin = (n_ymin[n] < ymin) ? n_ymin[n] : ymin;
-      zmax = (n_zmax[n] > zmax) ? n_zmax[n] : zmax;
-      zmin = (n_zmin[n] < zmin) ? n_zmin[n] : zmin;
-    }
-
-    const dfloat iporder = 1.0 / (p_Nq - 1.0); 
-    const dfloat dxgrd = (xmax - xmin) * iporder;
-    const dfloat dygrd = (ymax - ymin) * iporder;
-    const dfloat dzgrd = (zmax - zmin) * iporder;
-
-    const dfloat dd = fmax(dxgrd, dygrd);
-    dgrd[e] = fmax(dd, dzgrd);
   }
 }
   
