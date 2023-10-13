@@ -25,6 +25,7 @@ static occa::memory o_xt;
 static occa::memory o_xtq;
 static occa::memory o_OiOjSk;
 static occa::memory o_SijMag2;
+static occa::memory o_OijMag2;
 static occa::memory o_ywd;
 static occa::memory o_dgrd;
 
@@ -64,7 +65,14 @@ static dfloat coeff[] = {
     1.0,       // sigk2
     0.856,     // sigom2
     0.44,      // gamma2
-    1e-10      // tinySST
+    1e-10,     // tinySST
+
+    //DES parameters
+    0.78,      // cdes1
+    0.61,      // cdes2
+    20.0,      // c_d1
+    3.0,       // c_d2
+    0.41       // vkappa
 };
 } // namespace
 
@@ -124,6 +132,17 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
   if (!kernelInfo.get<std::string>("defines/p_tinySST").size())
     kernelInfo["defines/p_tinySST"] = coeff[23];
   
+  if (!kernelInfo.get<std::string>("defines/p_cdes1").size())
+    kernelInfo["defines/p_cdes1"] = coeff[24];
+  if (!kernelInfo.get<std::string>("defines/p_cdes2").size())
+    kernelInfo["defines/p_cdes2"] = coeff[25];
+  if (!kernelInfo.get<std::string>("defines/p_cd1").size())
+    kernelInfo["defines/p_cd1"] = coeff[26];
+  if (!kernelInfo.get<std::string>("defines/p_cd2").size())
+    kernelInfo["defines/p_cd2"] = coeff[27];
+  if (!kernelInfo.get<std::string>("defines/p_vkappa").size())
+    kernelInfo["defines/p_vkappa"] = coeff[28];
+
   const int verbose = platform->options.compareArgs("VERBOSE", "TRUE") ? 1 : 0;
 
   if (platform->comm.mpiRank == 0 && verbose) {
@@ -187,7 +206,9 @@ void RANSktau::updateProperties()
   occa::memory o_SijOij = platform->o_memPool.reserve<dfloat>(3 * nrs->NVfields * nrs->fieldOffset);
   postProcessing::strainRotationRate(nrs, true, true, o_SijOij);
 
-  SijMag2OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, 1, o_SijOij, o_OiOjSk, o_SijMag2);
+  bool ifOijMag = 0;
+  if(mid == 2) ifOijMag = 1;
+  SijMag2OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, 1, int(ifOijMag), o_SijOij, o_OiOjSk, o_SijMag2, o_OijMag2);
 
   computeGradKernel(mesh->Nelements,
                     nrs->cds->fieldOffset[kFieldIndex],
@@ -224,7 +245,9 @@ void RANSktau::updateSourceTerms()
                 o_xk,
                 o_xt,
                 o_xtq,
+                o_dgrd,
                 o_ywd,
+                o_OijMag2,
 		o_BFDiag,
                 o_FS);
 }
@@ -277,6 +300,7 @@ void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::st
                     mesh->o_y,
                     mesh->o_z,
                     o_dgrd);
+    o_OijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
   }
   setupCalled = 1;
 }
