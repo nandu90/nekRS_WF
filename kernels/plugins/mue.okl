@@ -23,7 +23,7 @@
         DIFF[n + 0 * offset] = mueLam + p_sigma_k * mut;
         DIFF[n + 1 * offset] = mueLam + p_sigma_tau * mut;
       }
-      else if(mid == 1){
+      else if(mid == 1 || mid == 2){
         const dfloat yw = YWD[n];
         const dfloat stmag2 = STMAG2[n];
         const dfloat xk = XK[n];
