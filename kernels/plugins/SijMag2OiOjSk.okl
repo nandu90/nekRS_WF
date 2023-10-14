@@ -31,6 +31,7 @@
 
       if (ifOijMag) {
         const dfloat magOij = o1 * o1 + o2 * o2 + o3 * o3;
+				MAGOIJ[n] = magOij;
       }
    }
 }
