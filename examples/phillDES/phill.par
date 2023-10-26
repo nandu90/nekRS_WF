@@ -1,6 +1,3 @@
-[OCCA]
-backend = serial
-
 [GENERAL]
 polynomialOrder = 3
 startFrom = "phill.fld"+time=0
