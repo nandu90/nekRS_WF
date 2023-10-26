@@ -67,6 +67,11 @@
 
         SSTBlendingFunc(rho, mue, kk, tau, stMag2, xk, yw, f1, mu_t);
 
+				const dfloat mu_min = p_edd_free * mue;
+				dfloat Rfact = 1.0;
+				if(mu_t < mu_min && yw > p_ywlim) 
+					Rfact = mu_t / mu_min;
+
         const dfloat f11 = 1.0 - f1;
         const dfloat beta = f1 * p_beta0_SST + f11 * p_beta2;
         const dfloat gamma = f1 * p_alp_inf_SST + f11 * p_gamma2;
@@ -99,16 +104,16 @@
           if(tau > 0.0) Y_k = rho * k2 / ddesL;
         }
 
-        Y_w = -rho * beta;
-        S_w0 = -2.0 * rho * p_sigom2 * f11 * xk;
-        G_wp = rho * gamma * tau * 2.0 * stMag2;
+        Y_w = -rho * beta * Rfact;
+        S_w0 = -2.0 * rho * p_sigom2 * f11 * xk * Rfact;
+        G_wp = rho * gamma * tau * 2.0 * stMag2 * Rfact;
 
         const dfloat tau_max = 8.0 * beta / 3.0;
-        S_tau = fmin(8.0 * mue * xtq, tau_max);
-        S_taup = 8.0 * rho * kk * xtq * sigom;
+        S_tau = fmin(8.0 * mue * xtq * Rfact, tau_max);
+        S_taup = 8.0 * rho * kk * xtq * sigom * Rfact;
       }
 
-      const dfloat kSrc = fmin(mu_t * 2*stMag2, 10.0 * Y_k * kk);
+      const dfloat kSrc = fmin(mu_t * 2.0 * stMag2, 10.0 * Y_k * kk);
       const dfloat kDiag = Y_k;
 
       dfloat tauSrc = 0.0;

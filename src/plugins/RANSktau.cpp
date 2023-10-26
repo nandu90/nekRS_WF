@@ -72,7 +72,11 @@ static dfloat coeff[] = {
     0.61,      // cdes2
     20.0,      // c_d1
     3.0,       // c_d2
-    0.41       // vkappa
+    0.41,      // vkappa
+
+		//Free-stream limiter
+		0.01,      // edd_free
+		0.5        // ywlim
 };
 } // namespace
 
@@ -142,6 +146,11 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     kernelInfo["defines/p_cd2"] = coeff[27];
   if (!kernelInfo.get<std::string>("defines/p_vkappa").size())
     kernelInfo["defines/p_vkappa"] = coeff[28];
+	
+  if (!kernelInfo.get<std::string>("defines/p_edd_free").size())
+    kernelInfo["defines/p_edd_free"] = coeff[29];
+  if (!kernelInfo.get<std::string>("defines/p_ywlim").size())
+    kernelInfo["defines/p_ywlim"] = coeff[30];
 
   const int verbose = platform->options.compareArgs("VERBOSE", "TRUE") ? 1 : 0;
 
