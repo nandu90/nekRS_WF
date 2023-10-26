@@ -32,6 +32,27 @@ c-----------------------------------------------------------------------
       subroutine userchk
       include 'SIZE'
       include 'TOTAL'
+
+      ! open(unit=10,file='des.dat',status='unknown')
+      ! do ie = 1,nelt
+      !   do ifc=1,2*ndim
+      !     if(cbc(ifc,ie,1).eq.'W  ')then
+      !       CALL FACIND (KX1,KX2,KY1,KY2,KZ1,KZ2,lx1,ly1,lz1,ifc)
+      !       DO IZ=KZ1,KZ2
+      !         DO IY=KY1,KY2
+      !           DO IX=KX1,KX2
+      !             yy = ym1(ix,iy,iz,ie)
+      !             zz = zm1(ix,iy,iz,ie)
+      !             if(yy .lt.2.0 .and. zz.lt.1e-8)then
+      !               write(10,*)xm1(ix,iy,iz,ie),t(ix,iy,iz,ie,1)
+      !             endif
+      !           enddo
+      !         enddo
+      !       enddo
+      !     endif
+      !   enddo
+      ! enddo
+      ! close(10)
       
       return
       end
@@ -44,8 +65,18 @@ c-----------------------------------------------------------------------
       end
 c-----------------------------------------------------------------------
       subroutine usrdat2()  ! This routine to modify mesh coordinates
+      implicit none
       include 'SIZE'
       include 'TOTAL'
+
+      real sarea,yy,yint,ymin,ymax,ymid
+      integer ntot,iel,ifc
+      real glmin,glmax
+
+      ntot = lx1*ly1*lz1*nelv
+      ymax = glmax(ym1,ntot)
+      ymin = glmin(ym1,ntot)
+      ymid = (ymax-ymin)/2.0
 
       do iel=1,nelt
       do ifc=1,2*ndim
@@ -57,8 +88,19 @@ c-----------------------------------------------------------------------
            cbc(ifc,iel,3) = 't  ' 
            cbc(ifc,iel,4) = 't  ' 
          endif
-         if (cbc(ifc,iel,1) .eq. 'W  ') boundaryID(ifc,iel) = 1
-         if (cbc(ifc,iel,2) .eq. 't  ') boundaryIDt(ifc,iel) = 1
+
+         call surface_int(yint,sarea,ym1(1,1,1,iel),iel,ifc)
+         yy = yint/sarea
+
+         if (cbc(ifc,iel,1) .eq. 'W  ')then
+           if(yy.lt.ymid) then
+             boundaryID(ifc,iel) = 1   !bottomWall
+             boundaryIDt(ifc,iel) = 1 
+           else
+             boundaryID(ifc,iel) = 2   !topWall
+             boundaryIDt(ifc,iel) = 2
+           endif
+         endif
       enddo
       enddo
 

@@ -3,11 +3,15 @@
 //
 #include "udf.hpp"
 #include "plugins/RANSktau.hpp"
+#include "plugins/tavg.hpp"
+
+#include "ci.inc"
 
 static dfloat rho, mueLam;
 
 #ifdef __okl__
 
+#include "ci.oudf"
 #include "phill.oudf"
 
 #endif
@@ -40,6 +44,14 @@ void uservp(nrs_t *nrs,
   scalarScaledAdd(mesh->Nlocal, conductivity, 1 / Pr_t, o_mue_t, o_temp_mue);
 }
 
+void UDF_Setup0(MPI_Comm comm, setupAide &options)
+{
+  options.getArgs("CI-MODE",ciMode);
+  if (ciMode) {
+    ciSetup(comm, options);
+  }
+}
+
 void UDF_Setup(nrs_t *nrs)
 {
   mesh_t *mesh = nrs->meshV;
@@ -52,14 +64,35 @@ void UDF_Setup(nrs_t *nrs)
   platform->options.getArgs("VISCOSITY", mueLam);
   platform->options.getArgs("DENSITY", rho);
 
-  /* std::string model = "ktau"; // or "default" */
-  /* RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model); */
-
   double *ywd = (double *) nek::scPtr(1);
-  std::string model = "sst";
+  std::string model = "sst+des";
   RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model, ywd);
+
+  if(ciMode){
+    auto o_u = nrs->o_U.slice(0 * nrs->fieldOffset, nrs->fieldOffset);
+    auto o_v = nrs->o_U.slice(1 * nrs->fieldOffset, nrs->fieldOffset);
+    auto o_w = nrs->o_U.slice(2 * nrs->fieldOffset, nrs->fieldOffset);
+
+    std::vector< std::vector<occa::memory> > tavgFields;
+    tavgFields.push_back({o_u});
+    tavgFields.push_back({o_v});
+    tavgFields.push_back({o_w});
+
+    tavg::setup(nrs,tavgFields);
+  }
 }
 
 void UDF_ExecuteStep(nrs_t *nrs, double time, int tstep)
 {
+  if(ciMode) {
+    tavg::run(time);
+    auto o_avg = tavg::o_avg();
+    ciTestErrors(nrs, time, tstep, o_avg);
+  }
+
+  // if(nrs->lastStep){
+    // tavg::outfld();
+    // nek::ocopyToNek(time, tstep);
+    // nek::userchk();
+  // }
 }
