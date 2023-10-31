@@ -101,7 +101,7 @@
           const dfloat ddesL = ransL - fd * fmax(0.0, ransL - xlesL);
 
           Y_k = 0.0;
-          if(tau > 0.0) Y_k = rho * k2 / ddesL;
+          if(ddesL > 0.0) Y_k = rho * k2 / ddesL;
         }
 
         Y_w = -rho * beta * Rfact;
