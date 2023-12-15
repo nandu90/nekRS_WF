@@ -10,7 +10,7 @@ namespace {
 static nrs_t *nrs;
 
 int kFieldIndex;
-int mid;
+static std::string mid;
 
 dfloat rho;
 dfloat mueLam;
@@ -30,8 +30,10 @@ static occa::memory o_ywd;
 static occa::memory o_dgrd;
 
 static occa::kernel computeKernel;
+static occa::kernel computeSSTKernel;
 static occa::kernel computeGradKernel;
 static occa::kernel mueKernel;
+static occa::kernel mueSSTKernel;
 static occa::kernel limitKernel;
 static occa::kernel desFilterKernel;
   
@@ -75,9 +77,9 @@ static dfloat coeff[] = {
     3.0,       // c_d2
     0.41,      // vkappa
 
-		//Free-stream limiter
-		0.01,      // edd_free
-		0.5        // ywlim
+    //Free-stream limiter
+    0.01,      // edd_free
+    0.5        // ywlim
 };
 } // namespace
 
@@ -187,8 +189,6 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     fileName = path + kernelName + extension;
     desFilterKernel = platform->device.buildKernel(fileName, kernelInfo, true);
 
-    const std::string headerFile = path + "RANSktauSSTBlendingFunc" + extension;
-    kernelInfo["includes"] += headerFile.c_str();
     kernelName = "RANSktauComputeHex3D";
     fileName = path + kernelName + extension;
     computeKernel = platform->device.buildKernel(fileName, kernelInfo, true);
@@ -196,6 +196,16 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     kernelName = "mue";
     fileName = path + kernelName + extension;
     mueKernel = platform->device.buildKernel(fileName, kernelInfo, true);
+
+    const std::string headerFile = path + "RANSktauSSTBlendingFunc.h";
+    kernelInfo["includes"] += headerFile.c_str();
+    kernelName = "RANSktauComputeSSTHex3D";
+    fileName = path + kernelName + extension;
+    computeSSTKernel = platform->device.buildKernel(fileName, kernelInfo, true);
+    
+    kernelName = "mueSST";
+    fileName = path + kernelName + extension;
+    mueSSTKernel = platform->device.buildKernel(fileName, kernelInfo, true);
   }
 
   int Nscalar;
@@ -222,11 +232,11 @@ void RANSktau::updateProperties()
   limitKernel(mesh->Nelements * mesh->Np, o_k, o_tau);
 
   occa::memory o_SijOij = platform->o_memPool.reserve<dfloat>(3 * nrs->NVfields * nrs->fieldOffset);
-  postProcessing::strainRotationRate(nrs, true, true, o_SijOij);
+  postProcessing::strainRotationRate(nrs, true, true, nrs->o_U, o_SijOij);
 
-  bool ifOijMag = 0;
-  if(mid == 2) ifOijMag = 1;
-  SijMag2OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, 1, int(ifOijMag), o_SijOij, o_OiOjSk, o_SijMag2, o_OijMag2);
+  bool ifOijMag = false;
+  if(mid == "SST+DES") ifOijMag = true;
+  SijMag2OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, 1, static_cast<int>(ifOijMag), o_SijOij, o_OiOjSk, o_SijMag2, o_OijMag2);
 
   computeGradKernel(mesh->Nelements,
                     nrs->cds->fieldOffset[kFieldIndex],
@@ -238,7 +248,12 @@ void RANSktau::updateProperties()
                     o_xt,
                     o_xtq);
 
-  mueKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, mid, rho, mueLam, o_k, o_tau, o_SijMag2, o_xk, o_ywd, o_mut, o_mue, o_diff);
+  if(mid == "KTAU"){
+    mueKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, rho, mueLam, o_k, o_tau, o_mut, o_mue, o_diff);
+  }
+  else if(mid == "SST" || mid == "SST+DES"){
+    mueSSTKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, rho, mueLam, o_k, o_tau, o_SijMag2, o_xk, o_ywd, o_mut, o_mue, o_diff);
+  }
 }
 
 occa::memory RANSktau::o_mue_t() { return o_mut; }
@@ -254,23 +269,42 @@ void RANSktau::updateSourceTerms()
   occa::memory o_FS = cds->o_FS + cds->fieldOffsetScan[kFieldIndex];
   occa::memory o_BFDiag = cds->o_BFDiag + cds->fieldOffsetScan[kFieldIndex];
 
-  computeKernel(mesh->Nelements * mesh->Np,
-                nrs->cds->fieldOffset[kFieldIndex],
-                mid,
-                rho,
-                mueLam,
-                o_k,
-                o_tau,
-                o_SijMag2,
-                o_OiOjSk,
-                o_xk,
-                o_xt,
-                o_xtq,
-                o_dgrd,
-                o_ywd,
-                o_OijMag2,
-		o_BFDiag,
-                o_FS);
+  if(mid == "KTAU") {
+    computeKernel(mesh->Nelements * mesh->Np,
+                  nrs->cds->fieldOffset[kFieldIndex],
+                  rho,
+                  mueLam,
+                  o_k,
+                  o_tau,
+                  o_SijMag2,
+                  o_OiOjSk,
+                  o_xk,
+                  o_xt,
+                  o_xtq,
+                  o_BFDiag,
+                  o_FS);
+  }
+  else {
+    bool ifDES = false;
+    if(mid == "SST+DES") ifDES = true;
+    computeSSTKernel(mesh->Nelements * mesh->Np,
+                     nrs->cds->fieldOffset[kFieldIndex],
+                     static_cast<int>(ifDES),
+                     rho,
+                     mueLam,
+                     o_k,
+                     o_tau,
+                     o_SijMag2,
+                     o_OiOjSk,
+                     o_xk,
+                     o_xt,
+                     o_xtq,
+                     o_dgrd,
+                     o_ywd,
+                     o_OijMag2,
+                     o_BFDiag,
+                     o_FS);
+  }
 }
 
 void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::string & model)
@@ -280,12 +314,11 @@ void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::st
   isInitialized = true;
 
   upperCase(model);
-  if(model.compare("DEFAULT") == 0 || model.compare("KTAU") == 0) mid = 0;
-  if(model.compare("SST") == 0) mid = 1;
-  if(model.compare("SST+DES") == 0) mid = 2;
-  if(mid == 1 || mid == 2){
+  if(model == "DEFAULT" || model == "KTAU") mid = "KTAU";
+  if(model == "SST" || model == "SST+DES"){
+    mid = model;
     if(o_ywd == o_NULL){
-      printf("\nSST model requires wall distance\nCheck usage\n");
+      printf("\nSST/DES model requires wall distance\nCheck usage\n");
       exit(1);
     }
   }
@@ -314,7 +347,7 @@ void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::st
   o_xt = platform->device.malloc<dfloat>(cds->fieldOffset[kFieldIndex]);
   o_xtq = platform->device.malloc<dfloat>(cds->fieldOffset[kFieldIndex]);
   
-  if(mid == 2){
+  if(mid == "SST+DES"){
     o_dgrd = platform->device.malloc<dfloat>(mesh->Nelements);
     desFilterKernel(mesh->Nelements,
                     nrs->fieldOffset,
