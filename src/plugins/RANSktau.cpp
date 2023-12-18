@@ -35,12 +35,13 @@ static occa::kernel computeGradKernel;
 static occa::kernel mueKernel;
 static occa::kernel mueSSTKernel;
 static occa::kernel limitKernel;
-static occa::kernel desFilterKernel;
+static occa::kernel desLenScaleKernel;
   
 static occa::kernel OiOjSkKernel;
 
 static bool buildKernelCalled = false;
 static bool setupCalled = false;
+static bool desScaleCalled = false;
 
 static dfloat coeff[] = {
     0.6,       // sigma_k
@@ -185,9 +186,9 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     fileName = path + kernelName + extension;
     OiOjSkKernel = platform->device.buildKernel(fileName, kernelInfo, true);
 
-    kernelName = "desFilter";
+    kernelName = "desLenScale";
     fileName = path + kernelName + extension;
-    desFilterKernel = platform->device.buildKernel(fileName, kernelInfo, true);
+    desLenScaleKernel = platform->device.buildKernel(fileName, kernelInfo, true);
 
     kernelName = "RANSktauComputeHex3D";
     fileName = path + kernelName + extension;
@@ -243,6 +244,9 @@ void RANSktau::updateProperties()
     platform->linAlg->magSqrVector(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_Oij, o_OijMag2);
   }
 
+  //not sure whether i want this here
+  o_SijOij.free();
+
   computeGradKernel(mesh->Nelements,
                     nrs->cds->fieldOffset[kFieldIndex],
                     mesh->o_vgeo,
@@ -291,7 +295,18 @@ void RANSktau::updateSourceTerms()
   }
   else {
     bool ifDES = false;
-    if(mid == "SST+DES") ifDES = true;
+    if(mid == "SST+DES") {
+      ifDES = true;
+      if(platform->options.compareArgs("MOVING MESH", "TRUE") || !desScaleCalled) {
+        desLenScaleKernel(mesh->Nelements,
+                          nrs->fieldOffset,
+                          mesh->o_x,
+                          mesh->o_y,
+                          mesh->o_z,
+                          o_dgrd);
+        desScaleCalled = true;
+      }
+    }
     computeSSTKernel(mesh->Nelements * mesh->Np,
                      nrs->cds->fieldOffset[kFieldIndex],
                      static_cast<int>(ifDES),
@@ -353,21 +368,14 @@ void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::st
   
   if(mid == "SST+DES"){
     o_dgrd = platform->device.malloc<dfloat>(mesh->Nelements);
-    desFilterKernel(mesh->Nelements,
-                    nrs->fieldOffset,
-                    mesh->o_x,
-                    mesh->o_y,
-                    mesh->o_z,
-                    o_dgrd);
     o_OijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
   }
   setupCalled = true;
 }
 
-void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::string & model, double *ywd)
+void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::string & model, occa::memory o_ywdIn)
 {
-  o_ywd = platform->device.malloc<dfloat>(nrsIn->fieldOffset);
-  o_ywd.copyFrom(ywd, nrsIn->fieldOffset);
+  o_ywd = o_ywdIn;
 
   RANSktau::setup(nrsIn, mueIn, rhoIn, ifld, model);
 }

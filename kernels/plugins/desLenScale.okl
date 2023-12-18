@@ -6,7 +6,7 @@ void rmin(dfloat *s_min, const dlong t, const dlong bs) {
   s_min[t] = (s_min[t] < s_min[t + bs]) ? s_min[t] : s_min[t + bs];
 }
 
-@kernel void desFilter(const dlong Nelements,
+@kernel void desLenScale(const dlong Nelements,
                        const dlong offset,
                        @ restrict const dfloat *x,
                        @ restrict const dfloat *y,

@@ -8,6 +8,7 @@
 #include "ci.inc"
 
 static dfloat rho, mueLam;
+static occa::memory o_ywd;
 
 #ifdef __okl__
 
@@ -64,9 +65,12 @@ void UDF_Setup(nrs_t *nrs)
   platform->options.getArgs("VISCOSITY", mueLam);
   platform->options.getArgs("DENSITY", rho);
 
-  double *ywd = (double *) nek::scPtr(1);
+  std::vector<int> bidWall = {1,2};
+  occa::memory o_bidWall = platform->device.malloc<int>(bidWall.size(), bidWall.data());
+  o_ywd = mesh->minDistance(bidWall.size(), o_bidWall, "cheap");
+
   std::string model = "sst+des";
-  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model, ywd);
+  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model, o_ywd);
 
   if(ciMode){
     auto o_u = nrs->o_U.slice(0 * nrs->fieldOffset, nrs->fieldOffset);
