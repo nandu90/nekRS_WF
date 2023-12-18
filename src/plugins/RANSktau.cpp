@@ -37,7 +37,7 @@ static occa::kernel mueSSTKernel;
 static occa::kernel limitKernel;
 static occa::kernel desFilterKernel;
   
-static occa::kernel SijMag2OiOjSkKernel;
+static occa::kernel OiOjSkKernel;
 
 static bool buildKernelCalled = false;
 static bool setupCalled = false;
@@ -181,9 +181,9 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     fileName = path + kernelName + extension;
     limitKernel = platform->device.buildKernel(fileName, kernelInfo, true);
 
-    kernelName = "SijMag2OiOjSk";
+    kernelName = "OiOjSk";
     fileName = path + kernelName + extension;
-    SijMag2OiOjSkKernel = platform->device.buildKernel(fileName, kernelInfo, true);
+    OiOjSkKernel = platform->device.buildKernel(fileName, kernelInfo, true);
 
     kernelName = "desFilter";
     fileName = path + kernelName + extension;
@@ -226,17 +226,22 @@ void RANSktau::updateProperties()
   mesh_t *mesh = nrs->meshV;
   cds_t *cds = nrs->cds;
 
-  occa::memory o_mue = nrs->o_mue;
-  occa::memory o_diff = cds->o_diff + cds->fieldOffsetScan[kFieldIndex];
+  auto o_mue = nrs->o_mue;
+  auto o_diff = cds->o_diff + cds->fieldOffsetScan[kFieldIndex];
 
   limitKernel(mesh->Nelements * mesh->Np, o_k, o_tau);
 
-  occa::memory o_SijOij = platform->o_memPool.reserve<dfloat>(3 * nrs->NVfields * nrs->fieldOffset);
+  auto o_SijOij = platform->o_memPool.reserve<dfloat>(3 * nrs->NVfields * nrs->fieldOffset);
   postProcessing::strainRotationRate(nrs, true, true, nrs->o_U, o_SijOij);
 
-  bool ifOijMag = false;
-  if(mid == "SST+DES") ifOijMag = true;
-  SijMag2OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, 1, static_cast<int>(ifOijMag), o_SijOij, o_OiOjSk, o_SijMag2, o_OijMag2);
+  platform->linAlg->magSqrSymTensor(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_SijOij, o_SijMag2);
+
+  if(mid == "KTAU") OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_SijOij, o_OiOjSk);
+
+  if(mid == "SST+DES") {
+    auto o_Oij = o_SijOij.slice(6 * nrs->fieldOffset);
+    platform->linAlg->magSqrVector(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_Oij, o_OijMag2);
+  }
 
   computeGradKernel(mesh->Nelements,
                     nrs->cds->fieldOffset[kFieldIndex],
@@ -266,8 +271,8 @@ void RANSktau::updateSourceTerms()
   mesh_t *mesh = nrs->meshV;
   cds_t *cds = nrs->cds;
 
-  occa::memory o_FS = cds->o_FS + cds->fieldOffsetScan[kFieldIndex];
-  occa::memory o_BFDiag = cds->o_BFDiag + cds->fieldOffsetScan[kFieldIndex];
+  auto o_FS = cds->o_FS + cds->fieldOffsetScan[kFieldIndex];
+  auto o_BFDiag = cds->o_BFDiag + cds->fieldOffsetScan[kFieldIndex];
 
   if(mid == "KTAU") {
     computeKernel(mesh->Nelements * mesh->Np,
@@ -295,7 +300,6 @@ void RANSktau::updateSourceTerms()
                      o_k,
                      o_tau,
                      o_SijMag2,
-                     o_OiOjSk,
                      o_xk,
                      o_xt,
                      o_xtq,

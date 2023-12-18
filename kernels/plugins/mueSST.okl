@@ -1,0 +1,36 @@
+@kernel void mueSST(const dlong N,
+                    const dlong offset,
+                    const dfloat rho,
+                    const dfloat mueLam,
+                    @ restrict const dfloat *K,
+                    @ restrict const dfloat *TAU,
+                    @ restrict const dfloat *STMAG2,
+                    @ restrict const dfloat *XK,
+                    @ restrict const dfloat *YWD,
+                    @ restrict dfloat *MUET,
+                    @ restrict dfloat *MUE,
+                    @ restrict dfloat *DIFF)
+{
+  for (dlong n = 0; n < N; ++n; @tile(p_blockSize, @outer, @inner))
+    if (n < N) {
+      const dfloat k = K[n];
+      const dfloat tau = TAU[n];
+
+      const dfloat yw = YWD[n];
+      const dfloat stmag2 = STMAG2[n];
+      const dfloat xk = XK[n];
+      dfloat f1 = 1.0;
+      dfloat mut = 0.0;
+      SSTBlendingFunc(rho, mueLam, k, tau, stmag2, xk, yw, f1, mut);
+
+      const dfloat f11 = 1.0 - f1;
+      const dfloat sigk = f1 * p_sigma_k_SST + f11 * p_sigk2;
+      const dfloat sigom = f1 * p_sigma_tau + f11 * p_sigom2;
+      DIFF[n + 0 * offset] = mueLam + sigk * mut;
+      DIFF[n + 1 * offset] = mueLam + sigom * mut;
+
+      MUET[n] = mut;
+
+      MUE[n] = mueLam + mut;
+    }
+}
