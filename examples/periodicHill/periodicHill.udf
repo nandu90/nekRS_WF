@@ -2,28 +2,129 @@
 // nekRS User Defined File
 //
 #include "udf.hpp"
+#include "plugins/RANSktau.hpp"
 #include "plugins/tavg.hpp"
+
+static std::string caseType;
+static dfloat rho, mueLam;
+static occa::memory o_ywd;
+
+#include "ci.inc"
 
 #ifdef __okl__
 
+#include "ci.oudf"
+#include "periodicHill.oudf"
+
 #endif
 
-void UDF_Setup0(MPI_Comm comm, setupAide &options) {}
+void userq(nrs_t *nrs, double time, occa::memory o_S, occa::memory o_FS)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  if(caseType == "DES") RANSktau::updateSourceTerms();
+}
+
+void uservp(nrs_t *nrs,
+              double time,
+              occa::memory o_U,
+              occa::memory o_S,
+              occa::memory o_UProp,
+              occa::memory o_SProp)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  if(caseType == "DES") {
+    RANSktau::updateProperties();
+
+    dfloat conductivity;
+    platform->options.getArgs("SCALAR00 DIFFUSIVITY", conductivity);
+    const dfloat Pr_t = 0.85;
+    occa::memory o_mue_t = RANSktau::o_mue_t();
+    occa::memory o_temp_mue = cds->o_diff + 0 * cds->fieldOffset[0];
+    scalarScaledAdd(mesh->Nlocal, conductivity, 1 / Pr_t, o_mue_t, o_temp_mue);
+  }
+}
+
+void UDF_Setup0(MPI_Comm comm, setupAide &options)
+{
+  platform->par->extract("casedata","caseType",caseType);
+  upperCase(caseType);
+  if(caseType == "LES"){
+    options.setArgs("VELOCITY STRESSFORMULATION", std::string("FALSE"));
+
+    options.setArgs("SCALAR01 SOLVER", std::string("NONE"));
+
+    options.setArgs("SCALAR02 SOLVER", std::string("NONE"));
+  }
+
+  options.getArgs("CI-MODE",ciMode);
+  if(ciMode) {
+    ciSetup(comm, options);
+  }
+}
 
 void UDF_Setup(nrs_t *nrs)
 {
-  tavg::setup(nrs);
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  udf.properties = &uservp;
+  udf.sEqnSource = &userq;
+
+  if(caseType == "DES") {
+    const int scalarFieldStart = 1;
+    platform->options.getArgs("VISCOSITY", mueLam);
+    platform->options.getArgs("DENSITY", rho);
+
+    std::vector<int> bidWall = {1,2};
+    occa::memory o_bidWall = platform->device.malloc<int>(bidWall.size(), bidWall.data());
+    o_ywd = mesh->minDistance(bidWall.size(), o_bidWall, "cheap");
+
+    std::string model = "sst+des";
+    RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model, o_ywd);
+
+    if(ciMode) {
+      auto o_u = nrs->o_U.slice(0 * nrs->fieldOffset, nrs->fieldOffset);
+      auto o_v = nrs->o_U.slice(1 * nrs->fieldOffset, nrs->fieldOffset);
+      auto o_w = nrs->o_U.slice(2 * nrs->fieldOffset, nrs->fieldOffset);
+
+      std::vector< std::vector<occa::memory> > tavgFields;
+      tavgFields.push_back({o_u});
+      tavgFields.push_back({o_v});
+      tavgFields.push_back({o_w});
+
+      tavg::setup(nrs,tavgFields);
+    }
+  }
+  else if(caseType == "LES") {
+    tavg::setup(nrs);
+  }
 }
 
 void UDF_ExecuteStep(nrs_t *nrs, double time, int tstep)
 {
-  tavg::run(time);
+  if(caseType == "DES" && ciMode) {
+    tavg::run(time);
+    auto o_avg = tavg::o_avg();
+    ciTestErrors(nrs, time, tstep, o_avg);
 
-  if (nrs->isOutputStep) {
-    nek::ocopyToNek(time, tstep);
-    nek::userchk(); // compute lambda2
-    nek::ocopyFromNek(time);
+    /* if(nrs->lastStep) { */
+    /*   tavg::outfld(); */
+    /*   nek::ocopyToNek(time, tstep); */
+    /*   nek::userchk(); */
+    /* } */
+  }
+  else if(caseType == "LES") {
+    tavg::run(time);
+    if (nrs->isOutputStep) {
+      nek::ocopyToNek(time, tstep);
+      nek::userchk(); // compute lambda2
+      nek::ocopyFromNek(time);
 
-    tavg::outfld();
+      tavg::outfld();
+    }
   }
 }

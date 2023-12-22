@@ -7,6 +7,7 @@
 #include "ci.inc"
 
 static dfloat rho, mueLam;
+static occa::memory o_ywd;
 
 #ifdef __okl__
 
@@ -92,7 +93,7 @@ void uservp(nrs_t *nrs,
 
   dfloat conductivity;
   platform->options.getArgs("SCALAR00 DIFFUSIVITY", conductivity);
-  const dfloat Pr_t = 0.7;
+  const dfloat Pr_t = 0.85;
   occa::memory o_mue_t = RANSktau::o_mue_t();
   occa::memory o_temp_mue = cds->o_diff + 0 * cds->fieldOffset[0];
   scalarScaledAdd(mesh->Nlocal, conductivity, 1 / Pr_t, o_mue_t, o_temp_mue);
@@ -129,12 +130,15 @@ void UDF_Setup(nrs_t *nrs)
   platform->options.getArgs("VISCOSITY", mueLam);
   platform->options.getArgs("DENSITY", rho);
 
-  /* std::string model = "ktau"; // or "default" */
-  /* RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model); */
+  std::string model = "ktau"; // or "default"
+  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model);
 
-  double *ywd = (double *) nek::scPtr(1);
-  std::string model = "sst";
-  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model, ywd);
+  /* std::vector<int> bidWall = {1}; */
+  /* occa::memory o_bidWall = platform->device.malloc<int>(bidWall.size(), bidWall.data()); */
+  /* o_ywd = mesh->minDistance(bidWall.size(), o_bidWall, "cheap"); */
+
+  /* std::string model = "sst"; */
+  /* RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model, o_ywd); */
 }
 
 void UDF_ExecuteStep(nrs_t *nrs, double time, int tstep)
