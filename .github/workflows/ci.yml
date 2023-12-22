@@ -455,6 +455,7 @@ jobs:
 
     - name: 'periodicHill'
       working-directory: ${{ env.NEKRS_EXAMPLES }}/periodicHill
-      run: sed -i 's/polynomialOrder = 7/polynomialOrder = 3/g' periodicHill.par 
-      run: ${{ env.NEKRS_HOME }}/bin/nrsmpi periodicHill 2 --cimode 1
-      run: sed -i 's/polynomialOrder = 3/polynomialOrder = 7/g' periodicHill.par 
+      run: |
+        sed -i 's/polynomialOrder = 7/polynomialOrder = 3/g' periodicHill.par && \
+        ${{ env.NEKRS_HOME }}/bin/nrsmpi periodicHill 2 --cimode 1 && \
+        sed -i 's/polynomialOrder = 3/polynomialOrder = 7/g' periodicHill.par 
