@@ -27,7 +27,9 @@ static occa::memory o_OiOjSk;
 static occa::memory o_SijMag2;
 static occa::memory o_OijMag2;
 static occa::memory o_ywd;
+static occa::memory o_ywdg;
 static occa::memory o_dgrd;
+static occa::memory o_wf;
 
 static occa::kernel computeKernel;
 static occa::kernel computeSSTKernel;
@@ -38,10 +40,12 @@ static occa::kernel limitKernel;
 static occa::kernel desLenScaleKernel;
   
 static occa::kernel OiOjSkKernel;
+static occa::kernel wallFuncKernel;
 
 static bool buildKernelCalled = false;
 static bool setupCalled = false;
 static bool desScaleCalled = false;
+static bool ywdCalled = false;
 
 static dfloat coeff[] = {
     0.6,       // sigma_k
@@ -80,7 +84,11 @@ static dfloat coeff[] = {
 
     //Free-stream limiter
     0.01,      // edd_free
-    0.5        // ywlim
+    0.5,       // ywlim
+
+    //Wall-function parameters
+    30.0,      // yplus
+    9.0        // Econ
 };
 } // namespace
 
@@ -159,6 +167,11 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
   if (!kernelInfo.get<std::string>("defines/p_ywlim").size())
     kernelInfo["defines/p_ywlim"] = coeff[30];
 
+  if (!kernelInfo.get<std::string>("defines/p_yplus").size())
+    kernelInfo["defines/p_yplus"] = coeff[31];
+  if (!kernelInfo.get<std::string>("defines/p_Econ").size())
+    kernelInfo["defines/p_Econ"] = coeff[32];
+
   const int verbose = platform->options.compareArgs("VERBOSE", "TRUE") ? 1 : 0;
 
   if (platform->comm.mpiRank == 0 && verbose) {
@@ -173,6 +186,12 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
   const std::string path = oklpath + "/plugins/";
   std::string fileName, kernelName;
   const std::string extension = ".okl";
+
+  std::string installDir;
+  installDir.assign(getenv("NEKRS_HOME"));
+  occa::properties kernelInfoBC = kernelInfo;
+  const std::string bcDataFile = installDir + "/include/bdry/bcData.h";
+  kernelInfoBC["includes"] += bcDataFile.c_str();
   {
     kernelName = "RANSktauGradHex3D";
     fileName = path + kernelName + extension;
@@ -207,7 +226,12 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     kernelName = "mueSST";
     fileName = path + kernelName + extension;
     mueSSTKernel = platform->device.buildKernel(fileName, kernelInfo, true);
+
+    kernelName = "wallFunc";
+    fileName = path + kernelName + extension;
+    wallFuncKernel = platform->device.buildKernel(fileName, kernelInfoBC, true);
   }
+
 
   int Nscalar;
   platform->options.getArgs("NUMBER OF SCALARS", Nscalar);
@@ -237,7 +261,7 @@ void RANSktau::updateProperties()
 
   platform->linAlg->magSqrSymTensor(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_SijOij, o_SijMag2);
 
-  if(mid == "KTAU") OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_SijOij, o_OiOjSk);
+  if(mid == "KTAU" || mid == "KTAU+SWF") OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_SijOij, o_OiOjSk);
 
   if(mid == "SST+DES") {
     auto o_Oij = o_SijOij.slice(6 * nrs->fieldOffset);
@@ -257,7 +281,7 @@ void RANSktau::updateProperties()
                     o_xt,
                     o_xtq);
 
-  if(mid == "KTAU"){
+  if(mid == "KTAU" || mid == "KTAU+SWF"){
     mueKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, rho, mueLam, o_k, o_tau, o_mut, o_mue, o_diff);
   }
   else if(mid == "SST" || mid == "SST+DES"){
@@ -278,7 +302,7 @@ void RANSktau::updateSourceTerms()
   auto o_FS = cds->o_FS + cds->fieldOffsetScan[kFieldIndex];
   auto o_BFDiag = cds->o_BFDiag + cds->fieldOffsetScan[kFieldIndex];
 
-  if(mid == "KTAU") {
+  if(mid == "KTAU" || mid == "KTAU+SWF") {
     computeKernel(mesh->Nelements * mesh->Np,
                   nrs->cds->fieldOffset[kFieldIndex],
                   rho,
@@ -292,6 +316,34 @@ void RANSktau::updateSourceTerms()
                   o_xtq,
                   o_BFDiag,
                   o_FS);
+    if(mid == "KTAU+SWF") {
+      if(platform->options.compareArgs("MOVING MESH", "TRUE") || !ywdCalled) {
+        nrs->gradientVolumeKernel(mesh->Nelements,
+            mesh->o_vgeo,
+            mesh->o_D,
+            nrs->fieldOffset,
+            o_ywd,
+            o_ywdg);
+        oogs::startFinish(o_ywdg, nrs->NVfields, nrs->fieldOffset, ogsDfloat, ogsAdd, nrs->gsh);
+
+        platform->linAlg->axmyVector(mesh->Nlocal, nrs->fieldOffset, 0, 1.0, nrs->meshV->o_invLMM, o_ywdg);
+
+        ywdCalled = true;
+      }
+    }
+    wallFuncKernel(mesh->Nelements,
+                   nrs->fieldOffset,
+                   rho,
+                   mueLam,
+                   mesh->o_sgeo,
+                   mesh->o_vmapM,
+                   mesh->o_EToB,
+                   nrs->o_EToB,
+                   nrs->o_U,
+                   o_k,
+                   o_tau,
+                   o_ywdg,
+                   o_wf);
   }
   else {
     bool ifDES = false;
@@ -334,10 +386,16 @@ void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::st
 
   upperCase(model);
   if(model == "DEFAULT" || model == "KTAU") mid = "KTAU";
-  if(model == "SST" || model == "SST+DES"){
+  if(model == "SST" || model == "SST+DES" || model == "KTAU+SWF"){
     mid = model;
     if(o_ywd == o_NULL){
-      printf("\nSST/DES model requires wall distance\nCheck usage\n");
+      printf("\n%s model requires wall distance\nCheck usage\n",model.c_str());
+      exit(1);
+    }
+  }
+  if(model == "KTAU+SWF") {
+    if(o_wf == o_NULL) {
+      printf("\n%s model requires WF arrays\nCheck usage\n",model.c_str());
       exit(1);
     }
   }
@@ -370,12 +428,24 @@ void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::st
     o_dgrd = platform->device.malloc<dfloat>(mesh->Nelements);
     o_OijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
   }
+  else if(mid == "KTAU+SWF"){
+    o_ywdg = platform->device.malloc<dfloat>(3 * nrs->fieldOffset);
+  }
   setupCalled = true;
 }
 
 void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::string & model, occa::memory o_ywdIn)
 {
   o_ywd = o_ywdIn;
+
+  RANSktau::setup(nrsIn, mueIn, rhoIn, ifld, model);
+}
+
+void RANSktau::setup(nrs_t *nrsIn, dfloat mueIn, dfloat rhoIn, int ifld, std::string & model, occa::memory o_ywdIn, occa::memory o_wfIn)
+{
+  o_ywd = o_ywdIn;
+
+  o_wf = o_wfIn;
 
   RANSktau::setup(nrsIn, mueIn, rhoIn, ifld, model);
 }

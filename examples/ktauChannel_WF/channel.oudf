@@ -1,0 +1,30 @@
+@kernel void scalarScaledAdd(const dlong N,
+                             const dfloat a,
+                             const dfloat b,
+                             @ restrict const dfloat *X,
+                             @ restrict dfloat *Y)
+{
+  for (dlong n = 0; n < N; ++n; @tile(256, @outer, @inner)) {
+    if (n < N) {
+      Y[n] = a + b * X[n];
+    }
+  }
+}
+
+void velocityNeumannConditions(bcData *bc)
+{
+  bc->tr1 = bc->usrwrk[bc->idM + 0 * bc->fieldOffset];
+  bc->tr2 = bc->usrwrk[bc->idM + 1 * bc->fieldOffset];
+}
+
+void scalarNeumannConditions(bcData *bc)
+{
+  if (bc->scalarId == 0) bc->flux = 0.0;
+  if (bc->scalarId == 1) bc->flux = 0.0;
+  if (bc->scalarId == 2) bc->flux = bc->usrwrk[bc->idM + 2 * bc->fieldOffset];
+}
+
+/* void scalarDirichletConditions(bcData *bc) */
+/* { */
+/*   bc->s = 0.0; */
+/* } */
