@@ -1,0 +1,89 @@
+//
+// nekRS User Defined File
+//
+#include "udf.hpp"
+#include "plugins/RANSktau.hpp"
+
+static dfloat rho, mueLam;
+static occa::memory o_ywd;
+static occa::memory o_uin;
+static occa::memory o_kin;
+static occa::memory o_tauin;
+
+#ifdef __okl__
+
+#include "bfs.oudf"
+
+#endif
+
+void userq(nrs_t *nrs, double time, occa::memory o_S, occa::memory o_FS)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  RANSktau::updateSourceTerms();
+}
+
+void uservp(nrs_t *nrs,
+            double time,
+            occa::memory o_U,
+            occa::memory o_S,
+            occa::memory o_UProp,
+            occa::memory o_SProp)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  RANSktau::updateProperties();
+
+  dfloat conductivity;
+  platform->options.getArgs("SCALAR00 DIFFUSIVITY", conductivity);
+  const dfloat Pr_t = 0.85;
+  occa::memory o_mue_t = RANSktau::o_mue_t();
+  occa::memory o_temp_mue = cds->o_diff + 0 * cds->fieldOffset[0];
+  scalarScaledAdd(mesh->Nlocal, conductivity, 1 / Pr_t, o_mue_t, o_temp_mue);
+}
+
+void UDF_Setup(nrs_t *nrs)
+{
+  mesh_t *mesh = nrs->meshV;
+  cds_t *cds = nrs->cds;
+
+  udf.properties = &uservp;
+  udf.sEqnSource = &userq;
+
+  const int scalarFieldStart = 1;
+  platform->options.getArgs("VISCOSITY", mueLam);
+  platform->options.getArgs("DENSITY", rho);
+
+  //Standard ktau model call
+  double *ywd = (double *) nek::scPtr(1);
+  double *uin = (double *) nek::scPtr(2);
+  double *kin = (double *) nek::scPtr(3);
+  double *tauin = (double *) nek::scPtr(4);
+  o_ywd = platform->device.malloc<dfloat>(nrs->fieldOffset,ywd);
+  o_uin = platform->device.malloc<dfloat>(nrs->fieldOffset,uin);
+  o_kin = platform->device.malloc<dfloat>(nrs->fieldOffset,kin);
+  o_tauin = platform->device.malloc<dfloat>(nrs->fieldOffset,tauin);
+  nrs->o_usrwrk = platform->device.malloc<dfloat>(6 * nrs->fieldOffset);
+  populateWrk(mesh->Nlocal, 
+              nrs->fieldOffset,
+              o_uin,
+              o_kin,
+              o_tauin,
+              nrs->o_usrwrk);
+
+  /* std::string model = "ktau"; // or "default" */
+  /* RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model); */
+
+  //ktau model with wall functions
+  std::string model = "ktau+swf";
+  RANSktau::setup(nrs, mueLam, rho, scalarFieldStart, model, o_ywd, nrs->o_usrwrk);
+}
+
+void UDF_ExecuteStep(nrs_t *nrs, double time, int tstep)
+{
+  /* if (nrs->isOutputStep) { */
+  /*   extractLine(nrs, time, tstep); */
+  /* } */
+}

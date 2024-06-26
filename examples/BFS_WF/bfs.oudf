@@ -1,0 +1,62 @@
+@kernel void scalarScaledAdd(const dlong N,
+                             const dfloat a,
+                             const dfloat b,
+                             @ restrict const dfloat *X,
+                             @ restrict dfloat *Y)
+{
+  for (dlong n = 0; n < N; ++n; @tile(256, @outer, @inner)) {
+    if (n < N) {
+      Y[n] = a + b * X[n];
+    }
+  }
+}
+
+@kernel void populateWrk(const dlong N,
+                         const dlong offset,
+                         @restrict const dfloat *uin,
+                         @restrict const dfloat *kin,
+                         @restrict const dfloat *tauin,
+                         @restrict dfloat *wrk)
+{
+  for (dlong n = 0; n < N; ++n; @tile(256, @outer, @inner)) {
+    if(n < N) {
+      wrk[n + 3 * offset] = uin[n];
+      wrk[n + 4 * offset] = kin[n];
+      wrk[n + 5 * offset] = tauin[n];
+    }
+  }
+}
+
+void velocityNeumannConditions(bcData *bc)
+{
+  bc->tr1 = bc->usrwrk[bc->idM + 0 * bc->fieldOffset];
+  bc->tr2 = bc->usrwrk[bc->idM + 1 * bc->fieldOffset];
+}
+
+void scalarNeumannConditions(bcData *bc)
+{
+  if (bc->scalarId == 0) bc->flux = 0.0;
+  if (bc->scalarId == 1) bc->flux = 0.0;
+  if (bc->scalarId == 2) bc->flux = bc->usrwrk[bc->idM + 2 * bc->fieldOffset];
+}
+
+void scalarDirichletConditions(bcData *bc)
+{
+  if(bc->id == 1) {
+    if(bc->scalarId == 0) bc->s = 0.0;
+    if(bc->scalarId == 1) bc->s = bc->usrwrk[bc->idM + 4 * bc->fieldOffset];
+    if(bc->scalarId == 2) bc->s = bc->usrwrk[bc->idM + 5 * bc->fieldOffset];
+  }
+  else{
+    bc->s = 0.0;
+  }
+}
+
+void velocityDirichletConditions(bcData *bc)
+{
+  if(bc->id == 1){
+    bc->u = bc->usrwrk[bc->idM + 3 * bc->fieldOffset];
+    bc->v = 0.0;
+    bc->w = 0.0;
+  }
+}

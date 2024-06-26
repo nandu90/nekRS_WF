@@ -1,0 +1,661 @@
+C
+C  USER SPECIFIED ROUTINES: 
+C
+C     - boundary conditions 
+C     - initial conditions  
+C     - variable properties 
+C     - forcing function for fluid (f)
+C     - forcing function for passive scalar (q)
+C     - general purpose routine for checking errors etc.        
+C
+c-----------------------------------------------------------------------
+      include "limits.f"
+      include "utilities.f"
+c-----------------------------------------------------------------------
+      subroutine userbc (ix,iy,iz,iside,eg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine useric (ix,iy,iz,ieg)
+      include 'SIZE'
+      include 'TOTAL'
+      include 'NEKUSE'
+
+      ux   = 1.0  
+      uy   = 0.0 
+      uz   = 0.0
+
+      if (ifield.eq.2) then
+         temp = 1.0
+      elseif (ifield.eq.3) then
+         temp = 0.01
+      elseif (ifield.eq.4) then
+         temp = 0.1
+      endif
+      
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine userchk
+      include 'SIZE'
+      include 'TOTAL'
+      
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat   ! This routine to modify element vertices
+      include 'SIZE'      ! _before_ mesh is generated, which 
+      include 'TOTAL'     ! guarantees GLL mapping of mesh.
+
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat2()  ! This routine to modify mesh coordinates
+      include 'SIZE'
+      include 'TOTAL'
+
+      integer iel, ifc, id_face
+      integer i, e, f, n
+      real dhi
+
+      ntot = lx1*ly1*lz1*nelt
+
+      do i=1,ntot
+         xm1(i,1,1,1) = xm1(i,1,1,1)/4.
+         ym1(i,1,1,1) = ym1(i,1,1,1)/4.
+      enddo
+
+      do iel=1,nelt
+      do ifc=1,2*ndim
+         id_face = bc(5,ifc,iel,1)
+         if (id_face.eq.31) then         ! inlet 
+             cbc(ifc,iel,1) = 'v  '
+             cbc(ifc,iel,2) = 't  '
+             cbc(ifc,iel,3) = 't  '
+             cbc(ifc,iel,4) = 't  '
+             boundaryID(ifc,iel) = 1
+             boundaryIDt(ifc,iel) = 1
+         elseif (id_face.eq.32) then     ! outlet 
+             cbc(ifc,iel,1) = 'O  '
+             cbc(ifc,iel,2) = 'I  '
+             cbc(ifc,iel,3) = 'I  '
+             cbc(ifc,iel,4) = 'I  '
+             boundaryID(ifc,iel) = 2
+             boundaryIDt(ifc,iel) = 2
+         elseif (id_face.eq.30) then     ! wall 
+             cbc(ifc,iel,1) = 'shl'
+             cbc(ifc,iel,2) = 'I  '
+             cbc(ifc,iel,3) = 'I  '
+             cbc(ifc,iel,4) = 'I  '
+
+             ! cbc(ifc,iel,1) = 'W  '
+             ! cbc(ifc,iel,2) = 't  '
+             ! cbc(ifc,iel,3) = 't  '
+             ! cbc(ifc,iel,4) = 't  '
+             boundaryID(ifc,iel) = 3
+             boundaryIDt(ifc,iel) = 3
+          endif
+
+          if(cbc(ifc,iel,1).eq.'P  ')then
+             cbc(ifc,iel,2) = 'P  '
+             cbc(ifc,iel,3) = 'P  '
+             cbc(ifc,iel,4) = 'P  '
+             boundaryID(ifc,iel) = 0
+             boundaryIDt(ifc,iel) = 0
+           elseif(cbc(ifc,iel,1).eq.'E  ')then
+             cbc(ifc,iel,2) = 'E  '
+             cbc(ifc,iel,3) = 'E  '
+             cbc(ifc,iel,4) = 'E  '
+          endif
+      enddo
+      enddo
+
+      call fixcorners('shl','W  ')
+
+      do iel=1,nelt
+      do ifc=1,2*ndim
+          if(cbc(ifc,iel,1).eq.'W  ')then
+            cbc(ifc,iel,2) = 't  '
+            cbc(ifc,iel,3) = 't  '
+            cbc(ifc,iel,4) = 't  '
+            boundaryID(ifc,iel) = 4
+            boundaryIDt(ifc,iel) = 4
+          endif
+      enddo
+      enddo
+
+      call count_boundaries
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine usrdat3
+      include 'SIZE'
+      include 'TOTAL'
+
+      real w1,w2,w3,w4,w5
+      common /SCRNS/
+     &     w1(lx1*ly1*lz1*lelv)
+     &     ,w2(lx1*ly1*lz1*lelv)
+     &     ,w3(lx1*ly1*lz1*lelv)
+     &     ,w4(lx1*ly1*lz1*lelv)
+     &     ,w5(lx1*ly1*lz1*lelv)
+
+      common /NRSSCPTR/ nrs_scptr(4)
+      integer*8 nrs_scptr
+
+      common /walldist/ ywd(lx1,ly1,lz1,lelv)
+      real ywd
+
+      real uin,kin,tauin
+
+      common /inletarr/ uinlet(lx1,ly1,lz1,lelv),
+     $                  kinlet(lx1,ly1,lz1,lelv), 
+     $                  tauinlet(lx1,ly1,lz1,lelv) 
+      real uinlet,kinlet,tauinlet
+
+      call distf2(ywd,1,'shl','W  ',w1,w2,w3,w4,w5)
+      nrs_scptr(1) = loc(ywd(1,1,1,1))
+
+      !get bcs
+      do ie=1,nelt
+        do ifc=1,2*ndim
+          if(cbc(ifc,ie,1).eq.'v  ')then
+            CALL FACIND (KX1,KX2,KY1,KY2,KZ1,KZ2,lx1,ly1,lz1,ifc)
+            DO IZ=KZ1,KZ2
+              DO IY=KY1,KY2
+                DO IX=KX1,KX2
+                  call userbc2(ix,iy,iz,ifc,ie,uin,kin,tauin)
+                  uinlet(ix,iy,iz,ie) = uin
+                  kinlet(ix,iy,iz,ie) = kin
+                  tauinlet(ix,iy,iz,ie) = tauin
+                enddo
+              enddo
+            enddo
+          endif
+        enddo
+      enddo
+
+      nrs_scptr(2) = loc(uinlet(1,1,1,1))
+      nrs_scptr(3) = loc(kinlet(1,1,1,1))
+      nrs_scptr(4) = loc(tauinlet(1,1,1,1))
+
+            
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine distf2(d,ifld,b1,b2,dmin,emin,xn,yn,zn)
+
+c     Generate a distance function to boundary with bc "b1" or "b2".
+c     This approach does not yet work with periodic boundary conditions.
+
+c     INPUT:  ifld - field type for which distance function is to be found.
+c             ifld = 1 for velocity
+c             ifld = 2 for temperature, etc.
+
+c     OUTPUT: d = distance to nearest boundary with boundary condition "b"
+
+c     Work arrays:  dmin,emin,xn,yn,zn
+
+      include 'SIZE'
+      include 'GEOM'       ! Coordinates
+      include 'INPUT'      ! cbc()
+      include 'TSTEP'      ! nelfld
+      include 'PARALLEL'   ! gather-scatter handle for field "ifld"
+
+      real d(lx1,ly1,lz1,lelt)
+      character*3 b1, b2
+
+      real dmin(lx1,ly1,lz1,lelt),emin(lx1,ly1,lz1,lelt)
+      real xn(lx1,ly1,lz1,lelt),yn(lx1,ly1,lz1,lelt)
+      real zn(lx1,ly1,lz1,lelt)
+
+
+      integer e,eg,f
+
+      nel = nelfld(ifld)
+      n = lx1*ly1*lz1*nel
+
+      call domain_size(xmin,xmax,ymin,ymax,zmin,zmax)
+
+      xmn = min(xmin,ymin)
+      xmx = max(xmax,ymax)
+      if (if3d) xmn = min(xmn ,zmin)
+      if (if3d) xmx = max(xmx ,zmax)
+
+      big = 10*(xmx-xmn)
+      call cfill (d,big,n)
+
+      call opcopy(xn,yn,zn,xm1,ym1,zm1)
+
+      nface = 2*ldim
+      do e=1,nel     ! Set d=0 on walls
+      do f=1,nface
+         if (cbc(f,e,1).eq.b1 .or. cbc(f,e,1).eq.b2)
+     $              call facev(d,e,f,0.,lx1,ly1,lz1)
+      enddo
+      enddo
+
+      nxyz = lx1*ly1*lz1
+
+      do ipass=1,10000
+         dmax    = 0
+         nchange = 0
+         do e=1,nel
+            do k=1,lz1
+            do j=1,ly1
+            do i=1,lx1
+              i0=max(  1,i-1)
+              j0=max(  1,j-1)
+              k0=max(  1,k-1)
+              i1=min(lx1,i+1)
+              j1=min(ly1,j+1)
+              k1=min(lz1,k+1)
+              do kk=k0,k1
+              do jj=j0,j1
+              do ii=i0,i1
+
+               dself  = d(i,j,k,e)
+               dneigh = d(ii,jj,kk,e)
+               if (dneigh.lt.dself) then  ! check neighbor's nearest point
+                  d2 = (xm1(i,j,k,e)-xn(ii,jj,kk,e))**2
+     $               + (ym1(i,j,k,e)-yn(ii,jj,kk,e))**2
+                  if (if3d) d2 = d2 + (zm1(i,j,k,e)-zn(ii,jj,kk,e))**2
+                  if (d2.gt.0) d2 = sqrt(d2)
+                  if (d2.lt.dself) then
+                    nchange = nchange+1
+                    d (i,j,k,e) = d2
+                    xn(i,j,k,e) = xn(ii,jj,kk,e)
+                    yn(i,j,k,e) = yn(ii,jj,kk,e)
+                    zn(i,j,k,e) = zn(ii,jj,kk,e)
+                    dmax = max(dmax,d(i,j,k,e))
+                  endif
+               endif
+              enddo
+              enddo
+              enddo
+            enddo
+            enddo
+            enddo
+            re = lglel(e)
+            call cfill(emin(1,1,1,e),re,nxyz)
+            call copy (dmin(1,1,1,e),d(1,1,1,e),nxyz)
+         enddo
+         nchange = iglsum(nchange,1)
+         call fgslib_gs_op(gsh_fld(ifld),dmin,1,3,0) ! min over all elements
+         nchange2=0
+         do e=1,nel
+         do i=1,nxyz
+          if (dmin(i,1,1,e).ne.d(i,1,1,e)) then
+             nchange2 = nchange2+1
+             emin(i,1,1,e) = 0  ! Flag
+          endif
+         enddo
+         enddo
+         call copy(d,dmin,n)                !   Ensure updated distance
+         nchange2 = iglsum(nchange2,1)
+         nchange  = nchange + nchange2
+         call fgslib_gs_op(gsh_fld(ifld),emin,1,4,0) ! max over all elements
+         do e=1,nel    ! Propagate nearest wall points
+         do i=1,nxyz
+          eg = emin(i,1,1,e)
+          if (eg.ne.lglel(e)) then
+             xn(i,1,1,e) = 0
+             yn(i,1,1,e) = 0
+             zn(i,1,1,e) = 0
+          endif
+         enddo
+         enddo
+         call fgslib_gs_op(gsh_fld(ifld),xn,1,1,0) !   Sum over all elements to
+         call fgslib_gs_op(gsh_fld(ifld),yn,1,1,0) !   convey nearest point
+         call fgslib_gs_op(gsh_fld(ifld),zn,1,1,0) !   to shared neighbor.
+         dmax = glmax(dmax,1)
+         if (nio.eq.0) write(6,1) ipass,nchange,dmax
+ 1           format(i9,i12,1pe12.4,' max wall distance 2')
+         if (nchange.eq.0) goto 1000
+      enddo
+ 1000  continue
+c     wgt = 0.3
+c     call filter_d2(d,lx1,lz1,wgt,.true.)
+      return
+      end
+c-----------------------------------------------------------------------                 
+      subroutine userbc2(ix,iy,iz,iside,e,uin,kin,tauin) ! set up boundary conditions
+      implicit none
+      include 'SIZE'
+      include 'TOTAL'
+      include 'SPLINE'
+
+      integer ix,iy,iz,iside,e,eg
+      
+      real uin,kin,tauin,yin
+
+      integer icalld
+      save icalld
+      data icalld /0/
+
+      if(icalld.eq.0)then
+         call getInletProf
+         icalld = 1
+      endif
+
+!     Inlet from spline
+      if(cbc(iside,e,1).eq.'v  ')then
+        yin = ym1(ix,iy,iz,e)+ymin_turb
+        if(yin.gt. 1.0) yin= 1.0
+        if(yin.lt.-1.0) yin=-1.0
+        call init_prof(yin, uin, kin, tauin)
+      else
+        uin = 0.0
+        kin = 0.0
+        tauin = 0.0
+      endif
+
+      return
+      end
+C-----------------------------------------------------------------------
+      subroutine getInletProf
+
+      include 'SPLINE'
+
+      real YY(npts),ZZ(npts)
+
+      if (nid.eq.0) then
+         write(*,'(A,I4)')      'npts  = ', npts
+         write(*,'(A,1pE10.2)') 'ymin = ', ymin
+         write(*,'(A,1pE10.2)') 'ymax = ', ymax
+         write(*,'(A,1pE10.2)') 'ymin_turb = ', ymin_turb
+         write(*,'(A,1pE10.2)') 'ymax_turb = ', ymax_turb
+      endif
+
+C  Read in the 1-D profile computed by turbChan2D
+C        velocity       in fU
+C        kinetic energy in fK
+C        omega          in fO
+
+      open(unit=100,file='InletProf.dat',status='old')
+      read(100, *)     ! skip the header
+      do i=1,npts
+        read(100,*)  YY(i), fU(i), fK(i), fO(i)
+c        write(*,*)  YY(i), fU(i), fK(i), fO(i)
+      enddo
+      close(100)
+
+C  compute spline coefficients for U
+      do i=1,npts
+        ZZ(i)  = fU(i)
+        SYY(i) = YY(i)
+      enddo
+      call spline (npts, YY, ZZ, sbU, scU, sdU)
+
+C  compute spline coefficients for T
+      do i=1,npts
+        ZZ(i) = fK(i)
+      enddo
+      call spline (npts, YY, ZZ, sbK, scK, sdK)
+
+C  compute spline coefficients for species mass fractions
+      do i=1,npts
+        ZZ(i) = fO(i)
+      enddo
+      call spline (npts, YY, ZZ, sbO, scO, sdO)
+
+      return
+      end
+
+c-----------------------------------------------------------------------
+      subroutine spline (n, x, y, b, c, d)
+
+c  the coefficients b(i), c(i), and d(i), i=1,2,...,n are computed
+c  for a cubic interpolating spline
+c
+c    s(x) = y(i) + b(i)*(x-x(i)) + c(i)*(x-x(i))**2 + d(i)*(x-x(i))**3
+c
+c    for  x(i) .le. x .le. x(i+1)
+c
+c  input.. 
+c
+c    n = the number of data points or knots (n.ge.2)
+c    x = the abscissas of the knots in strictly increasing order
+c    y = the ordinates of the knots
+c
+c  output..
+c
+c    b, c, d  = arrays of spline coefficients as defined above.
+c
+c  using  p  to denote differentiation,
+c
+c    y(i) = s(x(i))
+c    b(i) = sp(x(i))
+c    c(i) = spp(x(i))/2
+c    d(i) = sppp(x(i))/6  (derivative from the right)
+c
+c  the accompanying function subprogram  seval  can be used
+c  to evaluate the spline.
+
+      integer n
+      real x(n), y(n), b(n), c(n), d(n)
+
+      integer nm1, ib, i
+      real t
+
+C      do i = 1, n
+C        if (nid.eq.0) write(41,'(1p2E13.5)') x(i), y(i)
+C      enddo
+C      if (nid.eq.0) write(41,'(A)') '&'
+
+      nm1 = n-1
+      if ( n .lt. 2 ) return
+      if ( n .lt. 3 ) go to 50
+
+c  set up tridiagonal system
+c  b = diagonal, d = offdiagonal, c = right hand side.
+
+      d(1) = x(2) - x(1)
+      c(2) = (y(2) - y(1))/d(1)
+      do 10 i = 2, nm1
+         d(i) = x(i+1) - x(i)
+         b(i) = 2.*(d(i-1) + d(i))
+         c(i+1) = (y(i+1) - y(i))/d(i)
+         c(i) = c(i+1) - c(i)
+   10 continue
+
+c  end conditions.  third derivatives at  x(1)  and  x(n)
+c  obtained from divided differences
+
+      b(1) = -d(1)
+      b(n) = -d(n-1)
+      c(1) = 0.0
+      c(n) = 0.0
+      if ( n .eq. 3 ) go to 15
+      c(1) = c(3)/(x(4)-x(2)) - c(2)/(x(3)-x(1))
+      c(n) = c(n-1)/(x(n)-x(n-2)) - c(n-2)/(x(n-1)-x(n-3))
+      c(1) = c(1)*d(1)**2/(x(4)-x(1))
+      c(n) = -c(n)*d(n-1)**2/(x(n)-x(n-3))
+
+c  forward elimination
+
+   15 do 20 i = 2, n
+         t = d(i-1)/b(i-1)
+         b(i) = b(i) - t*d(i-1)
+         c(i) = c(i) - t*c(i-1)
+   20 continue
+
+c  back substitution
+
+      c(n) = c(n)/b(n)
+      do 30 ib = 1, nm1
+         i = n-ib
+         c(i) = (c(i) - d(i)*c(i+1))/b(i)
+   30 continue
+
+c  c(i) is now the sigma(i) of the text
+c
+c  compute polynomial coefficients
+
+      b(n) = (y(n) - y(nm1))/d(nm1) + d(nm1)*(c(nm1) + 2.*c(n))
+      do 40 i = 1, nm1
+         b(i) = (y(i+1) - y(i))/d(i) - d(i)*(c(i+1) + 2.*c(i))
+         d(i) = (c(i+1) - c(i))/d(i)
+         c(i) = 3.*c(i)
+   40 continue
+      c(n) = 3.0*c(n)
+      d(n) = d(n-1)
+      return
+
+   50 b(1) = (y(2)-y(1))/(x(2)-x(1))
+      c(1) = 0.0
+      d(1) = 0.0
+      b(2) = b(1)
+      c(2) = 0.0
+      d(2) = 0.0
+
+      return
+      end
+c---------------------------------------------------------------------
+      subroutine init_prof(y,Uin,Kin,Oin)
+c
+c Compute temperature + species using cubic splines
+c   f(y) = s(i) + sb(i)*(y-SYY(i)) + sc(i)*(y-SYY(i))**2 + sd(i)*(y-SYY(i))**3
+
+      include 'SPLINE'
+
+      real y, Uin, Kin, Oin
+
+      ii = 0
+      do i=1,npts-1
+        if (y.ge.SYY(i) .and. y.lt.SYY(i+1)) ii=i
+      enddo
+      if(abs(y-SYY(npts)).lt.1e-7) ii=npts
+
+      if (ii.le.0) then
+        write(*,*) 'Error in init_mean: ii= ', ii,'>npts=', npts, y
+        call exitt
+      endif
+
+      Uin=fU(ii) + sbU(ii)*(y-SYY(ii))
+     *     +scU(ii)*(y-SYY(ii))**2+sdU(ii)*(y-SYY(ii))**3
+
+      if (y.ge.SYY(npts)) Uin=fU(npts)
+
+      Kin=fK(ii) + sbK(ii)*(y-SYY(ii))
+     *     +scK(ii)*(y-SYY(ii))**2+sdK(ii)*(y-SYY(ii))**3
+
+      if (y.ge.SYY(npts)) Kin=fK(npts)
+
+      Oin=fO(ii) + sbO(ii)*(y-SYY(ii))
+     *     +scO(ii)*(y-SYY(ii))**2+sdO(ii)*(y-SYY(ii))**3
+
+      if (y.ge.SYY(npts)) Oin=fO(npts)
+
+      return
+      end
+c-----------------------------------------------------------------------                 
+      subroutine fixcorners(cbtype1,cbtype2)
+
+c     fixes masks for SYM face corners
+
+      include 'SIZE'
+      include 'INPUT'
+      include 'GEOM'
+      include 'PARALLEL'
+
+      common /scruz/ rmlt(lx1,ly1,lz1,lelv),runx(lx1,ly1,lz1,lelv)
+     $              ,runy(lx1,ly1,lz1,lelv),runz(lx1,ly1,lz1,lelv)
+     $              ,rt1x(lx1,ly1,lz1,lelv),rt1y(lx1,ly1,lz1,lelv)
+     $              ,rt1z(lx1,ly1,lz1,lelv),rt2x(lx1,ly1,lz1,lelv)
+     $              ,rt2y(lx1,ly1,lz1,lelv),rt2z(lx1,ly1,lz1,lelv)
+
+      character*3 cb,cbtype1,cbtype2
+
+      nxyz1= lx1*ly1*lz1
+      ntot1= nxyz1*nelv
+      nfaces = 2*ldim
+      tol  = 1e-1
+
+      call rzero  (rmlt,    ntot1)
+      call oprzero(runx,runy,runz)
+      call oprzero(rt1x,rt1y,rt1z)
+      call oprzero(rt2x,rt2y,rt2z)
+
+c      write(*,*) 'element faces from fixmask2'
+      do 1000 iel=1,nelv
+      ieg = lglel(iel)
+      do 100 iface=1,nfaces
+         cb = cbc(iface,iel,1)
+         if (cb.eq.cbtype1 .or. cb.eq.cbtype2) then
+            call facind(kx1,kx2,ky1,ky2,kz1,kz2,lx1,ly1,lz1,iface)
+            ia = 0
+            do 10 iz=kz1,kz2
+            do 10 iy=ky1,ky2
+            do 10 ix=kx1,kx2
+              ia =ia + 1
+              rmlt(ix,iy,iz,iel)=rmlt(ix,iy,iz,iel)+1.
+              runx(ix,iy,iz,iel)=runx(ix,iy,iz,iel)+unx(ia,1,iface,iel)
+              runy(ix,iy,iz,iel)=runy(ix,iy,iz,iel)+uny(ia,1,iface,iel)
+              rt1x(ix,iy,iz,iel)=rt1x(ix,iy,iz,iel)+t1x(ia,1,iface,iel)
+              rt1y(ix,iy,iz,iel)=rt1y(ix,iy,iz,iel)+t1y(ia,1,iface,iel)
+              rt2x(ix,iy,iz,iel)=rt2x(ix,iy,iz,iel)+t2x(ia,1,iface,iel)
+              rt2y(ix,iy,iz,iel)=rt2y(ix,iy,iz,iel)+t2y(ia,1,iface,iel)
+              if(if3d) then
+               runz(ix,iy,iz,iel)=runz(ix,iy,iz,iel)+unz(ia,1,iface,iel)
+               rt1z(ix,iy,iz,iel)=rt1z(ix,iy,iz,iel)+t1z(ia,1,iface,iel)
+               rt2z(ix,iy,iz,iel)=rt2z(ix,iy,iz,iel)+t2z(ia,1,iface,iel)
+              endif
+ 10         continue
+         endif
+ 100  continue
+ 1000 continue
+
+      call dssum  (rmlt,nx1,ny1,nz1)
+      call opdssum(runx, runy, runz)
+      call opdssum(rt1x, rt1y, rt1z)
+      call opdssum(rt2x, rt2y, rt2z)
+
+      do 2000 iel=1,nelv
+      ieg = lglel(iel)
+      do 200 iface=1,nfaces
+         cb = cbc(iface,iel,1)
+         if (cb.eq.cbtype1 .or. cb.eq.cbtype2) then
+            call facind(kx1,kx2,ky1,ky2,kz1,kz2,lx1,ly1,lz1,iface)
+            ia = 0
+            do 20 iz=kz1,kz2
+            do 20 iy=ky1,ky2
+            do 20 ix=kx1,kx2
+               ia =ia + 1
+               amul = rmlt(ix,iy,iz,iel)
+               runxs= runx(ix,iy,iz,iel)/amul
+               runys= runy(ix,iy,iz,iel)/amul
+               runzs= 0.0
+               rt1xs= rt1x(ix,iy,iz,iel)/amul
+               rt1ys= rt1y(ix,iy,iz,iel)/amul
+               rt1zs= 0.0
+               rt2xs= rt2x(ix,iy,iz,iel)/amul
+               rt2ys= rt2y(ix,iy,iz,iel)/amul
+               rt2zs= 0.0
+               if(if3d) then
+                  runzs= runz(ix,iy,iz,iel)/amul
+                  rt1zs= rt1z(ix,iy,iz,iel)/amul
+                  rt2zs= rt2z(ix,iy,iz,iel)/amul
+               endif
+               unmag = sqrt(runxs*runxs+runys*runys+runzs*runzs)
+               t1mag = sqrt(rt1xs*rt1xs+rt1ys*rt1ys+rt1zs*rt1zs)
+               t2mag = sqrt(rt2xs*rt2xs+rt2ys*rt2ys+rt2zs*rt2zs)
+
+               if((1.0-abs(unmag)).ge.tol) then
+c                 write(*,'(4(1X,A),3I5,2(2X,G14.7))') 'converting BC '
+c     $            ,cb, ' to ','W  ', ieg, iface, ia, unmag, amul
+
+                 cbc(iface,iel,1) = 'W  '
+               endif
+
+ 20         continue
+         endif
+ 200  continue
+ 2000 continue
+
+      return
+      end

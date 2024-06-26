@@ -1,0 +1,46 @@
+[GENERAL]
+polynomialOrder = 3
+#startFrom = bfs.fld+time=0
+stopAt = numSteps
+numsteps = 200000
+dt = 1e-04
+timeStepper = tombo2
+
+writeInterval = 10000
+
+subCyclingSteps = 2
+
+[PROBLEMTYPE]
+equation = navierStokes+variableViscosity
+
+[PRESSURE]
+residualTol = 1e-04
+
+[VELOCITY]
+boundaryTypeMap = v,O,shl,W
+#boundaryTypeMap = v,O,W
+residualTol = 1e-06
+density = 1.0
+viscosity = -149700.0 
+
+[TEMPERATURE]
+solver = none
+boundaryTypeMap = t,I,I,t 
+#boundaryTypeMap = t,I,t 
+residualTol = 1e-06
+rhoCp = 1.0
+conductivity = -149700.0 
+
+[SCALAR01] # k
+boundaryTypeMap = t,I,I,t 
+#boundaryTypeMap = t,I,t 
+residualTol = 1e-06
+rho = 1.0
+diffusivity = -149700.0
+
+[SCALAR02] # tau
+boundaryTypeMap = t,I,I,t 
+#boundaryTypeMap = t,I,t 
+residualTol = 1e-06
+rho = 1.0
+diffusivity = -149700.0
