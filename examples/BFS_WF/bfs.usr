@@ -88,9 +88,9 @@ c-----------------------------------------------------------------------
              boundaryIDt(ifc,iel) = 2
          elseif (id_face.eq.30) then     ! wall 
              cbc(ifc,iel,1) = 'shl'
-             cbc(ifc,iel,2) = 'I  '
-             cbc(ifc,iel,3) = 'I  '
-             cbc(ifc,iel,4) = 'I  '
+             cbc(ifc,iel,2) = 'f  '
+             cbc(ifc,iel,3) = 'f  '
+             cbc(ifc,iel,4) = 'f  '
 
              ! cbc(ifc,iel,1) = 'W  '
              ! cbc(ifc,iel,2) = 't  '

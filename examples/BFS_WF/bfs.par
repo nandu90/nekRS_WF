@@ -25,21 +25,21 @@ viscosity = -149700.0
 
 [TEMPERATURE]
 solver = none
-boundaryTypeMap = t,I,I,t 
+boundaryTypeMap = t,I,f,t 
 #boundaryTypeMap = t,I,t 
 residualTol = 1e-06
 rhoCp = 1.0
 conductivity = -149700.0 
 
 [SCALAR01] # k
-boundaryTypeMap = t,I,I,t 
+boundaryTypeMap = t,I,f,t 
 #boundaryTypeMap = t,I,t 
 residualTol = 1e-06
 rho = 1.0
 diffusivity = -149700.0
 
 [SCALAR02] # tau
-boundaryTypeMap = t,I,I,t 
+boundaryTypeMap = t,I,f,t 
 #boundaryTypeMap = t,I,t 
 residualTol = 1e-06
 rho = 1.0
