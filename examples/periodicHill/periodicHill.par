@@ -6,10 +6,15 @@ endTime = 100
 dt = targetCFL=2.0+initialTime=1e-4
 timeStepper = tombo2
 
+<<<<<<< HEAD
 writeControl = simulationTime
 writeInterval = 10
 
 constFlowRate = meanVelocity=1.0 + direction=X
+=======
+checkpointControl = simulationTime
+checkpointInterval = 20 
+>>>>>>> upstream/next
 
 regularization = hpfrt + nModes=1 + scalingCoeff=10
 
