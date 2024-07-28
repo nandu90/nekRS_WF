@@ -7,7 +7,14 @@ C-----------------------------------------------------------------------
       ux   = 1.0
       uy   = 0.0
       uz   = 0.0
-      temp = 0.0
+
+      if(ifield.eq.2)then
+        temp = 1.0
+      elseif(ifield.eq.3)then
+        temp = 0.01
+      elseif(ifield.eq.4)then
+        temp = 0.1
+      endif
 
       return
       end

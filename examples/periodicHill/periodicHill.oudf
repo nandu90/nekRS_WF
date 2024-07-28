@@ -10,8 +10,7 @@
     }
   }
 }
-
 void scalarDirichletConditions(bcData *bc)
 {
-  bc->s = 0;
+  bc->s = 0.0;
 }
