@@ -1,9 +1,10 @@
 #define surfaceTerms(sk,face,i, j)					\
   {									\
     const dlong bcType = EToB[face + p_Nfaces * e];			\
-    if(bcType == p_bcTypeSHL) {							\
     struct bcData bc;							\
     bc.idM = vmapM[sk];							\
+    bc.fieldOffset = offset;						\
+    if(bcType == p_bcTypeSHL) {							\
     bc.nx = sgeo[sk * p_Nsgeo + p_NXID];				\
     bc.ny = sgeo[sk * p_Nsgeo + p_NYID];				\
     bc.nz = sgeo[sk * p_Nsgeo + p_NZID];				\
@@ -13,7 +14,6 @@
     bc.t2x = sgeo[sk * p_Nsgeo + p_T2XID];				\
     bc.t2y = sgeo[sk * p_Nsgeo + p_T2YID];				\
     bc.t2z = sgeo[sk * p_Nsgeo + p_T2ZID];				\
-    bc.fieldOffset = offset;						\
     bc.id  = EToBM[face + p_Nfaces * e];				\
     bc.u  = U[bc.idM + 0 * offset];					\
     bc.v  = U[bc.idM + 1 * offset];					\
@@ -31,6 +31,11 @@
     W[bc.idM + 0*offset] = tw1;					\
     W[bc.idM + 1*offset] = tw2;					\
     W[bc.idM + 2*offset] = tau_flux;					\
+    }									\
+		else {									\
+    W[bc.idM + 0*offset] = 0.0;					\
+    W[bc.idM + 1*offset] = 0.0;					\
+    W[bc.idM + 2*offset] = 0.0;					\
     }									\
   }
 
