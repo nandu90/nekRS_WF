@@ -1,6 +1,6 @@
 [GENERAL]
-polynomialOrder = 7
-startFrom = "ktau.fld"+time=0
+polynomialOrder = 3
+startFrom = "des.fld"+time=0
 stopAt = endTime
 endTime = 100
 dt = 5e-03

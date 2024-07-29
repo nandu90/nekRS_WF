@@ -6,23 +6,19 @@ static int ciMode = 0;
 
 void ciSetup(MPI_Comm comm, setupAide &options)
 {
-  if(caseType == "DES") {
+  /* if(caseType == "DES") { */
     options.setArgs("POLYNOMIAL DEGREE", std::string("3"));
-    options.setArgs("CUBATURE POLYNOMIAL DEGREE", std::string("5"));
+    options.setArgs("CUBATURE POLYNOMIAL DEGREE", std::string("4"));
     options.setArgs("CONSTANT FLOW RATE", "TRUE");
     options.setArgs("CONSTANT FLOW DIRECTION", "X");
     options.setArgs("RESTART FILE NAME", std::string("des.fld+time=0"));
     options.setArgs("SOLUTION OUTPUT INTERVAL", "-1");
-    options.setArgs("VISCOSITY", std::to_string(1.0 / 10595.0));
+    options.setArgs("VISCOSITY", std::to_string(1.0/10595.0));
     options.setArgs("DENSITY", std::string("1.0"));
-    options.setArgs("NUMBER TIMESTEPS", std::string("-1"));
-    options.setArgs("END TIME", std::string("2"));
-    options.setArgs("TIME INTEGRATOR", "TOMBO2");
-    options.setArgs("ADVECTION TYPE", "CONVECTIVE+CUBATURE");
-    options.setArgs("DT", std::string("targetCFL=2.0+initialTime=1e-3"));
-    options.setArgs("SUBCYCLING STEPS", std::string("1"));
+    options.setArgs("END TIME", std::string("1"));
+    options.setArgs("ADVECTION TYPE", "CUBATURE+CONVECTIVE");
+    options.setArgs("DT", std::string("5e-3"));
 
-    options.setArgs("PRESSURE KRYLOV SOLVER", "PGMRES+FLEXIBLE");
     options.setArgs("PRESSURE SOLVER TOLERANCE", std::string("1e-4"));
     options.setArgs("PRESSURE PRECONDITIONER", "MULTIGRID");
     options.setArgs("PRESSURE MULTIGRID COARSE SOLVE", "TRUE");
@@ -43,7 +39,7 @@ void ciSetup(MPI_Comm comm, setupAide &options)
 
     options.setArgs("SCALAR02 SOLVER TOLERANCE", std::string("1e-6"));
     options.setArgs("SCALAR02 INITIAL GUESS", "EXTRAPOLATION");
-  }
+  /* } */
 }
 
 void ciTestErrors(nrs_t *nrs, double time, int tstep, occa::memory o_avgU)
@@ -53,31 +49,7 @@ void ciTestErrors(nrs_t *nrs, double time, int tstep, occa::memory o_avgU)
   mesh_t *mesh = nrs->meshV;
   cds_t *cds = nrs->cds;
 
-  auto o_Sij = platform->o_memPool.reserve<dfloat>(2 * nrs->NVfields * nrs->fieldOffset);
-
-  nrs->SijOijKernel(mesh->Nelements,
-    nrs->fieldOffset,
-    0,
-    1,
-    mesh->o_vgeo,
-    mesh->o_D,
-    o_avgU,
-    o_Sij);
-
-  oogs::startFinish(o_Sij,
-    2 * nrs->NVfields,
-    nrs->fieldOffset,
-    ogsDfloat,
-    ogsAdd,
-    nrs->gsh);
-
-  platform->linAlg->axmyMany(mesh->Nlocal,
-    2 * nrs->NVfields,
-    nrs->fieldOffset,
-    0,
-    1.0,
-    mesh->o_invLMM,
-    o_Sij);
+  auto o_Sij = nrs->strainRate();
 
   occa::memory o_tauw = platform->device.malloc<dfloat>(nrs->fieldOffset);
   platform->linAlg->fill(mesh->Nlocal, 0.0, o_tauw);
@@ -90,6 +62,10 @@ void ciTestErrors(nrs_t *nrs, double time, int tstep, occa::memory o_avgU)
     nrs->o_mue,
     o_Sij,
     o_tauw);
+
+	double norm = platform->linAlg->norm2(mesh->Nlocal, o_tauw, platform->comm.mpiComm);
+
+	printf("\nNorm2: %.4e\n",norm);
 
   occa::memory o_xintercept = platform->device.malloc<dfloat>(mesh->Nelements);
   const int bID = 1; //lowerWall
@@ -123,10 +99,13 @@ void ciTestErrors(nrs_t *nrs, double time, int tstep, occa::memory o_avgU)
     printf("\n Reattachment length = %g : relative error = %g\n", relen, lenErr);
   }
 
-  (fabs(lenErr) < EPS) ? (CIPASS) : (CIFAIL);
+	CiEvalTest("Re-attachment length", fabs(lenErr) < EPS, "with relative LinfErr:" + to_string_f(lenErr));
 
-  /* occa::memory o_tau = cds->o_S + 0 * cds->fieldOffset[0]; */
-  /* platform->linAlg->fill(mesh->Nlocal, 1.0, o_tau); */
-  /* platform->linAlg->axmy(mesh->Nlocal, 1.0, o_tauw, o_tau); */
+  occa::memory o_tau = cds->o_S;
+  platform->linAlg->fill(mesh->Nlocal, 1.0, o_tau);
+  platform->linAlg->axmy(mesh->Nlocal, 1.0, o_tauw, o_tau);
 
+	norm = platform->linAlg->norm2(mesh->Nlocal, cds->o_S, platform->comm.mpiComm);
+
+	printf("\nNorm2: %.4e\n",norm);
 }
