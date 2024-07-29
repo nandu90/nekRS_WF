@@ -1,9 +1,14 @@
 #include "RANSktau.hpp"
+#include "tavg.hpp"
 
 static dfloat rho, mueLam;
+occa::memory o_ywd;
+
+#include "ci.inc"
 
 #ifdef __okl__
 
+#include "ci.oudf"
 #include "periodicHill.oudf"
 
 #endif
@@ -41,10 +46,17 @@ void UDF_LoadKernels(deviceKernelProperties& kernelInfo)
 
 void UDF_Setup0(MPI_Comm comm, setupAide &options)
 {
+	options.getArgs("CI-MODE", ciMode);
+	if (ciMode) {
+		ciSetup(comm, options);
+	}
 }
 
 void UDF_Setup()
 {
+	auto mesh = nrs->meshV;
+	auto cds = nrs->cds;
+
   nrs->userProperties = &uservp;
   nrs->userScalarSource = &userq;
 
@@ -52,9 +64,43 @@ void UDF_Setup()
   platform->options.getArgs("VISCOSITY", mueLam);
   platform->options.getArgs("DENSITY", rho);
 
-  RANSktau::setup(mueLam, rho, scalarFieldStart);
+	std::vector<int> bidWall = {1,2};
+	occa::memory o_bidWall = platform->device.malloc<int>(bidWall.size(), bidWall.data());
+	o_ywd = mesh->minDistance(bidWall.size(), o_bidWall, "cheap");
+
+	std::string model = "sst+des";
+  RANSktau::setup(mueLam, rho, scalarFieldStart,model,o_ywd);
+
+	/* if(ciMode) { */
+		std::vector< std::vector<deviceMemory<dfloat>> > tavgFields;
+
+		deviceMemory<dfloat> o_u(nrs->o_U.slice(0 * nrs->fieldOffset , nrs->fieldOffset));
+		deviceMemory<dfloat> o_v(nrs->o_U.slice(1 * nrs->fieldOffset , nrs->fieldOffset));
+		deviceMemory<dfloat> o_w(nrs->o_U.slice(2 * nrs->fieldOffset , nrs->fieldOffset));
+		deviceMemory<dfloat> o_k(cds->o_S.slice(1 * nrs->fieldOffset , nrs->fieldOffset));
+		deviceMemory<dfloat> o_tau(cds->o_S.slice(2 * nrs->fieldOffset , nrs->fieldOffset));
+
+		tavgFields.push_back({o_u});
+		tavgFields.push_back({o_v});
+		tavgFields.push_back({o_w});
+		tavgFields.push_back({o_k});
+		tavgFields.push_back({o_tau});
+
+		tavg::setup(nrs->fieldOffset,tavgFields);
+	/* } */
 }
 
 void UDF_ExecuteStep(double time, int tstep)
 {
+
+	/* if(ciMode){ */
+		tavg::run(time);
+
+		auto o_avg = tavg::o_avg();
+		/* ciTestErrors(nrs, time, tstep, o_avg); */
+
+		if(nrs->isCheckpointStep) tavg::outfld();
+
+	/* } */
+	if(nrs->isCheckpointStep) nek::userchk();
 }
