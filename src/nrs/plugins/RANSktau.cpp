@@ -253,7 +253,7 @@ void RANSktau::updateProperties()
   }
 
   computeGradKernel(mesh->Nelements,
-                    nrs->fieldOffset,
+                    nrs->cds->fieldOffset[kFieldIndex],
                     mesh->o_vgeo,
                     mesh->o_D,
                     o_k,
@@ -314,7 +314,7 @@ void RANSktau::updateSourceTerms()
   }
 
   computeKernel(mesh->Nelements * mesh->Np,
-                nrs->fieldOffset,
+                nrs->cds->fieldOffset[kFieldIndex],
                 static_cast<int>(ifktau),
                 static_cast<int>(ifdes),
                 rho,

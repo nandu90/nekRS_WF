@@ -68,7 +68,8 @@ void SSTBlendingFunc(const dfloat rho,
       const dfloat k = K[n];
       const dfloat tau = TAU[n];
 
-      dfloat f1, mut, sigk, sigom;
+      dfloat mut = 0.0;
+			dfloat sigk, sigom;
       if(ifktau){
         mut = rho * p_alpinf_str * k * tau;
         sigk = p_sigma_k;
@@ -78,6 +79,7 @@ void SSTBlendingFunc(const dfloat rho,
         const dfloat yw = YWD[n];
         const dfloat stmag2 = STMAG2[n];
         const dfloat xk = XK[n];
+				dfloat f1 = 1.0;
         SSTBlendingFunc(rho, mueLam, k, tau, stmag2, xk, yw, f1, mut);
         const dfloat f11 = 1.0 - f1;
         sigk = f1 * p_sigmak_SST + f11 * p_sigk2;
@@ -123,15 +125,18 @@ void SSTBlendingFunc(const dfloat rho,
       const dfloat kk = K[n];
       const dfloat tau = TAU[n];
 
-      dfloat mu_t;
-      dfloat f_beta_str = 1.0;
+      dfloat mu_t = 0.0;
       dfloat Y_k = 0.0;
       dfloat Rfact = 1.0;
       dfloat Y_w, S_w0, G_wp, sigom, beta;
+      dfloat itau = 0;
+      if (tau > 0)
+        itau = 1 / (tau + p_tiny);
 
       if(ifktau){
         mu_t = rho * p_alpinf_str * kk * tau;
         dfloat sigd = p_sigd_min;
+				dfloat f_beta_str = 1.0;
         if (xk > 0) {
           const dfloat xk3 = xk * xk * tau * tau;
           sigd = p_sigd_max;
@@ -139,6 +144,8 @@ void SSTBlendingFunc(const dfloat rho,
         }
         const dfloat x_w = fabs(OiOjSk) * (tau * tau * tau * p_ibetainf_str3);
         const dfloat f_b = (p_pope) ? (1.0 + p_fb_c1 * x_w) / (1.0 + p_fb_c2 * x_w) : 1.0;
+
+        Y_k = rho * p_betainf_str * f_beta_str * itau;
         Y_w = -rho * p_beta0 * f_b;
         S_w0 = -rho * sigd *xk;
         G_wp = rho * p_alp_inf * tau * 2*stMag2;
@@ -158,6 +165,8 @@ void SSTBlendingFunc(const dfloat rho,
         const dfloat beta = f1 * p_beta0_SST + f11 * p_beta2;
         const dfloat gamma = f1 * p_alpinf_SST + f11 * p_gamma2;
         sigom = f1 * p_sigma_tau + f11 * p_sigom2;
+
+				Y_k = rho * p_betainf_str * itau;
 
         if(ifdes){
           const dfloat cdes = f1 * p_cdes1 + f11 * p_cdes2;
@@ -186,13 +195,6 @@ void SSTBlendingFunc(const dfloat rho,
         G_wp = rho * gamma * tau * 2.0 * stMag2 * Rfact;
       }
 
-      dfloat itau = 0;
-      if (tau > 0)
-        itau = 1 / (tau + p_tiny);
-
-      if(ifktau || !ifdes){
-        Y_k = rho * p_betainf_str * f_beta_str * itau;
-      }
       const dfloat kSrc = fmin(mu_t * 2*stMag2, 10.0f * Y_k * kk);
       const dfloat kDiag = Y_k;
 
