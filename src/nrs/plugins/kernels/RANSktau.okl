@@ -162,7 +162,7 @@ void SSTBlendingFunc(const dfloat rho,
           Rfact = mu_t / mu_min;
 
         const dfloat f11 = 1.0 - f1;
-        const dfloat beta = f1 * p_beta0_SST + f11 * p_beta2;
+        beta = f1 * p_beta0_SST + f11 * p_beta2;
         const dfloat gamma = f1 * p_alpinf_SST + f11 * p_gamma2;
         sigom = f1 * p_sigma_tau + f11 * p_sigom2;
 
