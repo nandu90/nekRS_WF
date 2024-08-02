@@ -3,6 +3,7 @@
 #include "nekInterfaceAdapter.hpp"
 #include "RANSktau.hpp"
 #include "linAlg.hpp"
+#include "bcMap.hpp"
 
 // private members
 namespace
@@ -40,9 +41,13 @@ static occa::kernel desLenScaleKernel;
 
 static occa::kernel SijMag2OiOjSkKernel;
 
+static std::vector<int> wbID;
+static occa::memory o_wbID;
+
 static bool buildKernelCalled = false;
 static bool setupCalled = false;
-static bool desScaleCalled = false;
+static bool movingMesh = false;
+static bool cheapWd = false;
 
 static dfloat coeff[] = {
     0.6,       // sigma_k
@@ -262,6 +267,8 @@ void RANSktau::updateProperties()
                     o_xt,
                     o_xtq);
 
+	if(movingMesh && cheapWd) o_ywd = mesh->minDistance(wbID.size(), o_wbID, "cheap_dist");
+
   mueKernel(mesh->Nelements * mesh->Np, 
             nrs->fieldOffset,
             rho,
@@ -302,15 +309,13 @@ void RANSktau::updateSourceTerms()
   bool ifdes = 1;
   if(model != "SST+DES") ifdes = 0;
   if(ifdes){
-    if(platform->options.compareArgs("MOVING MESH", "TRUE") || !desScaleCalled) {
+    if(movingMesh) 
       desLenScaleKernel(mesh->Nelements,
                         nrs->fieldOffset,
                         mesh->o_x,
                         mesh->o_y,
                         mesh->o_z,
                         o_dgrd);
-      desScaleCalled = true;
-    }
   }
 
   computeKernel(mesh->Nelements * mesh->Np,
@@ -346,10 +351,10 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
   rho = rhoIn;
   kFieldIndex = ifld; // tauFieldIndex is assumed to be kFieldIndex+1
 
-  upperCase(model);
-
   cds_t *cds = nrs->cds;
   mesh_t *mesh = nrs->meshV;
+
+	movingMesh = platform->options.compareArgs("MOVING MESH", "TRUE");
 
   nekrsCheck(cds->NSfields < kFieldIndex+1, platform->comm.mpiComm, EXIT_FAILURE, 
     "%s\n", "number of scalar fields too low!");
@@ -371,6 +376,12 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
   if(model == "SST+DES"){
     o_dgrd = platform->device.malloc<dfloat>(mesh->Nelements);
     o_OijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
+		desLenScaleKernel(mesh->Nelements,
+											nrs->fieldOffset,
+											mesh->o_x,
+											mesh->o_y,
+											mesh->o_z,
+											o_dgrd);
   }
 
   setupCalled = true;
@@ -380,9 +391,39 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
   }
 }
 
+void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld, std::string &modelIn)
+{
+  model = modelIn;
+
+  upperCase(model);
+
+  nrs_t *_nrs = dynamic_cast<nrs_t *>(platform->solver);
+	auto mesh = _nrs->meshV;
+
+	if(model != "KTAU") {
+		for (auto &[key, bcID] : bcMap::map()) {
+			const auto field = key.first;
+			if (field == "velocity") {
+				if (bcID == bcMap::bcTypeW) {
+					wbID.push_back(key.second + 1);
+				}
+			}
+		}
+		o_wbID = platform->device.malloc<int>(wbID.size(), wbID.data());
+		o_ywd = mesh->minDistance(wbID.size(), o_wbID, "cheap_dist");
+
+		cheapWd = true;
+	}
+
+  RANSktau::setup(mueIn, rhoIn, ifld);
+}
+
 void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld, std::string &modelIn, occa::memory &o_ywdIn)
 {
   model = modelIn;
+
+	upperCase(model);
+
   o_ywd = o_ywdIn;
   RANSktau::setup(mueIn, rhoIn, ifld);
 }
