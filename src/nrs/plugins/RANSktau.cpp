@@ -13,8 +13,8 @@ static nrs_t *nrs;
 int kFieldIndex;
 static std::string model = "KTAU";
 
-dfloat rho;
-dfloat mueLam;
+static dfloat rho;
+static dfloat mueLam;
 
 static occa::memory o_mut;
 
@@ -44,8 +44,10 @@ static occa::kernel SijMag2OiOjSkKernel;
 static std::vector<int> wbID;
 static occa::memory o_wbID;
 
-static bool buildKernelCalled = false;
+static occa::properties ktauInfo;
+
 static bool setupCalled = false;
+static bool buildKernelCalled = false;
 static bool movingMesh = false;
 static bool cheapWd = false;
 
@@ -87,17 +89,22 @@ static dfloat coeff[] = {
     0.41      // vkappa
 };
 
-occa::memory implicitK(double time, int scalarIdx)
+} // namespace
+
+
+occa::memory RANSktau::implicitK(double time, int scalarIdx)
 {
   if (scalarIdx == kFieldIndex) return o_implicitKtau.slice(0 * nrs->fieldOffset, nrs->fieldOffset);
   if (scalarIdx == kFieldIndex + 1) return o_implicitKtau.slice(1 * nrs->fieldOffset, nrs->fieldOffset);
   return o_NULL;
 }
 
-} // namespace
+occa::properties RANSktau::RANSInfo(){return ktauInfo;}
 
 void RANSktau::buildKernel(occa::properties _kernelInfo)
 {
+  if(buildKernelCalled == 1) return;
+
   occa::properties kernelInfo;
   if (!kernelInfo.get<std::string>("defines/p_sigma_k").size()) {
     kernelInfo["defines/p_sigma_k"] = coeff[0];
@@ -200,6 +207,8 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
     std::cout << kernelInfo << std::endl;
   }
 
+  ktauInfo = kernelInfo;
+
   kernelInfo += _kernelInfo;
 
   auto buildKernel = [&kernelInfo](const std::string &fileName, const std::string &kernelName) {
@@ -236,7 +245,7 @@ void RANSktau::updateProperties()
              MPI_COMM_SELF,
              EXIT_FAILURE,
              "%s\n",
-             "called prior to tavg::setup()!");
+             "called prior to RANSktau::setup()!");
 
   mesh_t *mesh = nrs->meshV;
   cds_t *cds = nrs->cds;
@@ -267,7 +276,7 @@ void RANSktau::updateProperties()
                     o_xt,
                     o_xtq);
 
-	if(movingMesh && cheapWd) o_ywd = mesh->minDistance(wbID.size(), o_wbID, "cheap_dist");
+  if(movingMesh && cheapWd) o_ywd = mesh->minDistance(wbID.size(), o_wbID, "cheap_dist");
 
   mueKernel(mesh->Nelements * mesh->Np, 
             nrs->fieldOffset,
@@ -296,7 +305,7 @@ void RANSktau::updateSourceTerms()
              MPI_COMM_SELF,
              EXIT_FAILURE,
              "%s\n",
-             "called prior to tavg::setup()!");
+             "called prior to RANSktau::setup()!");
 
   mesh_t *mesh = nrs->meshV;
   cds_t *cds = nrs->cds;
@@ -354,7 +363,7 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
   cds_t *cds = nrs->cds;
   mesh_t *mesh = nrs->meshV;
 
-	movingMesh = platform->options.compareArgs("MOVING MESH", "TRUE");
+  movingMesh = platform->options.compareArgs("MOVING MESH", "TRUE");
 
   nekrsCheck(cds->NSfields < kFieldIndex+1, platform->comm.mpiComm, EXIT_FAILURE, 
     "%s\n", "number of scalar fields too low!");
@@ -365,7 +374,7 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
   o_mut = platform->device.malloc<dfloat>(cds->fieldOffset[kFieldIndex]);
 
   o_implicitKtau = platform->device.malloc<dfloat>(2 * nrs->fieldOffset);
-  cds->userImplicitLinearTerm = implicitK;
+  cds->userImplicitLinearTerm = RANSktau::implicitK;
 
   if(model == "KTAU") o_OiOjSk = platform->device.malloc<dfloat>(nrs->fieldOffset);
   o_SijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
@@ -376,12 +385,12 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
   if(model == "SST+DES"){
     o_dgrd = platform->device.malloc<dfloat>(mesh->Nelements);
     o_OijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
-		desLenScaleKernel(mesh->Nelements,
-											nrs->fieldOffset,
-											mesh->o_x,
-											mesh->o_y,
-											mesh->o_z,
-											o_dgrd);
+    desLenScaleKernel(mesh->Nelements,
+		      nrs->fieldOffset,
+		      mesh->o_x,
+		      mesh->o_y,
+		      mesh->o_z,
+		      o_dgrd);
   }
 
   setupCalled = true;
@@ -398,32 +407,34 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld, std::string &modelIn)
   upperCase(model);
 
   nrs_t *_nrs = dynamic_cast<nrs_t *>(platform->solver);
-	auto mesh = _nrs->meshV;
-
-	if(model != "KTAU") {
-		for (auto &[key, bcID] : bcMap::map()) {
-			const auto field = key.first;
-			if (field == "velocity") {
-				if (bcID == bcMap::bcTypeW) {
-					wbID.push_back(key.second + 1);
-				}
-			}
-		}
-		o_wbID = platform->device.malloc<int>(wbID.size(), wbID.data());
-		o_ywd = mesh->minDistance(wbID.size(), o_wbID, "cheap_dist");
-
-		cheapWd = true;
+  auto mesh = _nrs->meshV;
+  
+  if(model != "KTAU") {
+    for (auto &[key, bcID] : bcMap::map()) {
+      const auto field = key.first;
+      if (field == "velocity") {
+	if (bcID == bcMap::bcTypeW) {
+	  wbID.push_back(key.second + 1);
 	}
-
+      }
+    }
+    o_wbID = platform->device.malloc<int>(wbID.size(), wbID.data());
+    o_ywd = mesh->minDistance(wbID.size(), o_wbID, "cheap_dist");
+    
+    cheapWd = true;
+  }
+  
   RANSktau::setup(mueIn, rhoIn, ifld);
 }
 
 void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld, std::string &modelIn, occa::memory &o_ywdIn)
 {
   model = modelIn;
-
-	upperCase(model);
+  
+  upperCase(model);
 
   o_ywd = o_ywdIn;
   RANSktau::setup(mueIn, rhoIn, ifld);
 }
+
+bool RANSktau::setup(){return setupCalled;}

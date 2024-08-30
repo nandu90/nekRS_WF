@@ -86,7 +86,8 @@ set(NRS_SRC
     src/core/linAlg/matrixRightSolve.cpp
     src/plugins/tavg.cpp
     src/nrs/plugins/velRecycling.cpp
-    src//nrs/plugins/RANSktau.cpp
+    src/nrs/plugins/RANSktau.cpp
+    src/nrs/plugins/RANSktauBuo.cpp
     src/nrs/plugins/lowMach.cpp
     src/nrs/plugins/lpm.cpp
     src/pointInterpolation/findpts/findpts.cpp
