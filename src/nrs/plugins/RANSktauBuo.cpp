@@ -12,6 +12,7 @@ int kFieldIndex;
 
 static dfloat rho;
 static dfloat mueLam;
+static dfloat specificHeat;
 static dfloat conductivity;
 static dfloat Ri;
 
@@ -121,7 +122,7 @@ void RANSbuo::updateProperties()
 
   //SGDH
   auto o_mut = RANSktau::o_mue_t();
-  diffKernel(mesh->Nlocal, conductivity, o_mut, o_temp_mue);
+  diffKernel(mesh->Nlocal, conductivity, specificHeat, o_mut, o_temp_mue);
 }
 
 void RANSbuo::updateSourceTerms()
@@ -135,41 +136,39 @@ void RANSbuo::updateSourceTerms()
   mesh_t *mesh = nrs->meshV;
   cds_t *cds = nrs->cds;
 
-  occa::memory o_FS = cds->o_NLT + cds->fieldOffsetScan[kFieldIndex];
-  occa::memory o_Tgrad = platform->o_memPool.reserve<dfloat>(nrs->fieldOffset);
+  occa::memory o_Tgrad = platform->o_memPool.reserve<dfloat>(nrs->cds->fieldOffset[kFieldIndex]);
 
   nrs->gradientVolumeKernel(mesh->Nelements,
                             mesh->o_vgeo,
                             mesh->o_D,
-                            nrs->fieldOffset,
+                            nrs->cds->fieldOffset[kFieldIndex],
                             o_T,
                             o_Tgrad);
 
   oogs::startFinish(o_Tgrad,
                     nrs->NVfields,
-                    nrs->fieldOffset,
+                    nrs->cds->fieldOffset[kFieldIndex],
                     ogsDfloat,
                     ogsAdd,
                     nrs->gsh);
 
   platform->linAlg->axmyVector(mesh->Nlocal,
-			       nrs->fieldOffset,
+			       nrs->cds->fieldOffset[kFieldIndex],
 			       0,
 			       1.0,
 			       mesh->o_invLMM,
 			       o_Tgrad);
 
   
-  computeKernel(mesh->Nelements,
-                nrs->fieldOffset,
+  computeKernel(mesh->Nelements * mesh->Np,
+                nrs->cds->fieldOffset[kFieldIndex],
                 rho,
-		Ri,
-		o_gvec,
-		o_k,
-		o_tau,
-		o_Tgrad,
-		o_implicitBuo,
-		o_FS);
+								Ri,
+								o_gvec,
+								o_k,
+								o_tau,
+								o_Tgrad,
+								o_implicitBuo);
 }
 
 void RANSbuo::setup(dfloat mueIn, dfloat rhoIn, int ifld, dfloat RiIn, dfloat *gIn)
@@ -200,6 +199,9 @@ void RANSbuo::setup(dfloat mueIn, dfloat rhoIn, int ifld, dfloat RiIn, dfloat *g
   o_implicitBuo = platform->device.malloc<dfloat>(2 * nrs->fieldOffset);
   cds->userImplicitLinearTerm = implicitBuo;
 
+	dfloat rhoCp;
+  platform->options.getArgs("SCALAR00 DENSITY",rhoCp);
+	specificHeat = rhoCp / rho;	
   platform->options.getArgs("SCALAR00 DIFFUSIVITY",conductivity);
 
   setupCalled = 1;

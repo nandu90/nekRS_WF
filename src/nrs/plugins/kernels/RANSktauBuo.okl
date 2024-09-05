@@ -6,7 +6,7 @@
                           @ restrict const dfloat *T,
                           @ restrict dfloat *FU)
 {
-  for (dlong n = 0; n < N; ++n; @tile(256, @outer, @inner)) {
+  for (dlong n = 0; n < N; ++n; @tile(p_blockSize, @outer, @inner)) {
     if(n < N) {
 			const dfloat fac = -rho * Ri * T[n];
       FU[n + 0 * offset] = fac * g[0];
@@ -17,18 +17,19 @@
 }
 
 @kernel void ktauBuoDiff(const dlong N,
-                         const dfloat lamDiff,
+                         const dfloat kc,
+												 const dfloat cp,
                          @restrict const dfloat *mut,
                          @restrict dfloat *diff)
 {
-  for (dlong n = 0; n < N; ++n; @tile(256, @outer, @inner)) {
+  for (dlong n = 0; n < N; ++n; @tile(p_blockSize, @outer, @inner)) {
     if(n < N) {
-      diff[n] = lamDiff + p_iPrt * mut[n];
+      diff[n] = kc +  cp * p_iPrt * mut[n];
     }
   }
 }
 
-@kernel void ktauBuoCompute(const dlong Nelements,
+@kernel void ktauBuoCompute(const dlong N,
                             const dlong offset,
                             const dfloat rho,
                             const dfloat Ri,
@@ -36,42 +37,30 @@
                             @ restrict const dfloat *TKE,
                             @ restrict const dfloat *TAU,
                             @ restrict const dfloat *Tgrad,
-                            @ restrict dfloat * SRCDIAG,
-                            @ restrict dfloat *SRC)
+                            @ restrict dfloat * SRCDIAG)
 {
-  for (dlong e = 0; e < Nelements; ++e; @outer(0)) {
-  
-#pragma unroll p_Nq
-    for (int k = 0; k < p_Nq; ++k) {
-      for (int j = 0; j < p_Nq; ++j; @inner(1)) {
-        for (int i = 0; i < p_Nq; ++i; @inner(0)) {
-          const dlong id = e * p_Np + k * p_Nq * p_Nq + j * p_Nq + i;
+  for (dlong n = 0; n < N; ++n; @tile(p_blockSize, @outer, @inner)) {
+		if(n < N){
+			const dfloat tau = TAU[n];
 
-          const dfloat tau = TAU[id];
+			const dfloat mu_t0 = rho * p_alpinf_str * tau;
 
-          const dfloat mu_t0 = rho * p_alpinf_str * tau;
+			const dfloat t_x = Tgrad[n + 0 * offset];
+			const dfloat t_y = Tgrad[n + 1 * offset];
+			const dfloat t_z = Tgrad[n + 2 * offset];
 
-          const dfloat t_x = Tgrad[id + 0 * offset];
-          const dfloat t_y = Tgrad[id + 1 * offset];
-          const dfloat t_z = Tgrad[id + 2 * offset];
+			const dfloat flux = (t_x*g[0] + t_y*g[1] + t_z*g[2]) * p_iPrt * Ri;
 
-          const dfloat flux = (t_x*g[0] + t_y*g[1] + t_z*g[2]) * p_iPrt * Ri;
+			const dfloat kSrc = 0.0;            //mu_t0*flux*k
+			const dfloat kDiag = -mu_t0 * flux;
 
-          const dfloat kSrc = 0.0;            //mu_t0*flux*k
-          const dfloat kDiag = -mu_t0 * flux;
+			const dfloat G_w = rho * p_alp_inf * tau * flux;
 
-          const dfloat G_w = rho * p_alp_inf * tau * flux;
+			const dfloat tauSrc = 0.0;     //G_w*tau
+			const dfloat tauDiag = -G_w;
 
-          const dfloat tauSrc = 0.0;     //G_w*tau
-          const dfloat tauDiag = -G_w;
-
-          SRC[id + 0 * offset] += kSrc;
-          SRC[id + 1 * offset] += tauSrc;
-          SRCDIAG[id + 0 * offset] += kDiag;
-          SRCDIAG[id + 1 * offset] += tauDiag;
-        }
-      }
-      @barrier();
-    }
-  }
+			SRCDIAG[n + 0 * offset] = kDiag;
+			SRCDIAG[n + 1 * offset] = tauDiag;
+		}
+	}
 }
