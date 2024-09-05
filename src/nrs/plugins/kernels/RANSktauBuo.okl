@@ -1,5 +1,6 @@
 @kernel void ktauBuoForce(const dlong N,
                           const dlong offset,
+													const dfloat rho,
                           const dfloat Ri,
                           @ restrict const dfloat *g,
                           @ restrict const dfloat *T,
@@ -7,9 +8,10 @@
 {
   for (dlong n = 0; n < N; ++n; @tile(256, @outer, @inner)) {
     if(n < N) {
-      FU[n + 0 * offset] = -Ri * g[0] * T[n];
-      FU[n + 1 * offset] = -Ri * g[1] * T[n];
-      FU[n + 2 * offset] = -Ri * g[2] * T[n];
+			const dfloat fac = -rho * Ri * T[n];
+      FU[n + 0 * offset] = fac * g[0];
+      FU[n + 1 * offset] = fac * g[1];
+      FU[n + 2 * offset] = fac * g[2];
     }
   }
 }

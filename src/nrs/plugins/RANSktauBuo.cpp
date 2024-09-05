@@ -99,6 +99,7 @@ void RANSbuo::updateForce(occa::memory o_FU)
 
   forceKernel(mesh->Nlocal,
               nrs->fieldOffset,
+							rho,
               Ri,
               o_gvec,
               o_T,
