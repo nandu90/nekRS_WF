@@ -136,24 +136,24 @@ void RANSbuo::updateSourceTerms()
   mesh_t *mesh = nrs->meshV;
   cds_t *cds = nrs->cds;
 
-  occa::memory o_Tgrad = platform->o_memPool.reserve<dfloat>(nrs->cds->fieldOffset[kFieldIndex]);
+  occa::memory o_Tgrad = platform->o_memPool.reserve<dfloat>(nrs->NVfields * nrs->fieldOffset);
 
   nrs->gradientVolumeKernel(mesh->Nelements,
                             mesh->o_vgeo,
                             mesh->o_D,
-                            nrs->cds->fieldOffset[kFieldIndex],
+                            nrs->fieldOffset,
                             o_T,
                             o_Tgrad);
 
   oogs::startFinish(o_Tgrad,
                     nrs->NVfields,
-                    nrs->cds->fieldOffset[kFieldIndex],
+                    nrs->fieldOffset,
                     ogsDfloat,
                     ogsAdd,
                     nrs->gsh);
 
   platform->linAlg->axmyVector(mesh->Nlocal,
-			       nrs->cds->fieldOffset[kFieldIndex],
+			       nrs->fieldOffset,
 			       0,
 			       1.0,
 			       mesh->o_invLMM,
@@ -161,7 +161,7 @@ void RANSbuo::updateSourceTerms()
 
   
   computeKernel(mesh->Nelements * mesh->Np,
-                nrs->cds->fieldOffset[kFieldIndex],
+                nrs->fieldOffset,
                 rho,
 								Ri,
 								o_gvec,
