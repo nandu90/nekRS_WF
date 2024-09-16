@@ -347,7 +347,7 @@ void RANSktau::updateSourceTerms()
                 o_FS);
 }
 
-void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
+void RANSktau::setup(int ifld)
 {
   static bool isInitialized = false;
   if (isInitialized) {
@@ -356,9 +356,22 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
   isInitialized = true;
 
   nrs = dynamic_cast<nrs_t *>(platform->solver);
-  mueLam = mueIn;
-  rho = rhoIn;
   kFieldIndex = ifld; // tauFieldIndex is assumed to be kFieldIndex+1
+
+  platform->options.getArgs("VISCOSITY", mueLam);
+  platform->options.getArgs("DENSITY", rho);
+
+  for (int i = 0; i < 2; i++) {
+    auto cds = nrs->cds;
+    auto mesh = (kFieldIndex + i) ? cds->meshV : cds->mesh[0]; // only first scalar can be a CHT mesh
+    auto o_rho = cds->o_prop.slice(cds->fieldOffsetSum + cds->fieldOffsetScan[kFieldIndex + i]);
+    platform->linAlg->fill(mesh->Nlocal, rho, o_rho);
+
+    const std::string sid = scalarDigitStr(kFieldIndex + i);
+    nekrsCheck(!platform->options.getArgs("SCALAR" + sid + " DIFFUSIVITY").empty() ||
+               !platform->options.getArgs("SCALAR" + sid + " DENSITY").empty(),
+               platform->comm.mpiComm, EXIT_FAILURE, "%s\n", "illegal property specificition for k/tau in par!");
+  }
 
   cds_t *cds = nrs->cds;
   mesh_t *mesh = nrs->meshV;
@@ -400,7 +413,7 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld)
   }
 }
 
-void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld, std::string &modelIn)
+void RANSktau::setup(int ifld, std::string &modelIn)
 {
   model = modelIn;
 
@@ -424,17 +437,17 @@ void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld, std::string &modelIn)
     cheapWd = true;
   }
   
-  RANSktau::setup(mueIn, rhoIn, ifld);
+  RANSktau::setup(ifld);
 }
 
-void RANSktau::setup(dfloat mueIn, dfloat rhoIn, int ifld, std::string &modelIn, occa::memory &o_ywdIn)
+void RANSktau::setup(int ifld, std::string &modelIn, occa::memory &o_ywdIn)
 {
   model = modelIn;
   
   upperCase(model);
 
   o_ywd = o_ywdIn;
-  RANSktau::setup(mueIn, rhoIn, ifld);
+  RANSktau::setup(ifld);
 }
 
 bool RANSktau::setup(){return setupCalled;}

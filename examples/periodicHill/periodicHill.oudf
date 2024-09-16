@@ -10,7 +10,7 @@
     }
   }
 }
-void scalarDirichletConditions(bcData *bc)
+void codedFixedValueScalar(bcData *bc)
 {
   bc->s = 0.0;
 }
