@@ -420,7 +420,7 @@ void RANSktau::setup(int ifld, std::string &modelIn)
   upperCase(model);
 
   nrs_t *_nrs = dynamic_cast<nrs_t *>(platform->solver);
-  auto mesh = _nrs->meshV;
+  auto mesh = _nrs->mesh;
   
   if(model != "KTAU") {
     for (auto &[key, bcID] : bcMap::map()) {

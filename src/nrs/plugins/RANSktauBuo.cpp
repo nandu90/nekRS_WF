@@ -36,7 +36,7 @@ static dfloat coeff[] = {
 
 occa::memory implicitBuo(double time, int scalarIdx)
 {
-  mesh_t* mesh = nrs->meshV;
+  mesh_t* mesh = nrs->mesh;
   auto o_implicitKtau = RANSktau::implicitK(time, scalarIdx);
 
   if (scalarIdx == kFieldIndex){
@@ -95,7 +95,7 @@ void RANSbuo::buildKernel(occa::properties _kernelInfo)
 
 void RANSbuo::updateForce(occa::memory o_FU)
 {
-  mesh_t *mesh = nrs->meshV;
+  mesh_t *mesh = nrs->mesh;
   cds_t *cds = nrs->cds;
 
   forceKernel(mesh->Nlocal,
@@ -115,7 +115,7 @@ void RANSbuo::updateProperties()
              "%s\n",
              "called prior to RANSBuo::setup()!");
 
-  mesh_t *mesh = nrs->meshV;
+  mesh_t *mesh = nrs->mesh;
   cds_t *cds = nrs->cds;
   
   auto o_temp_mue = cds->o_diff;
@@ -133,7 +133,7 @@ void RANSbuo::updateSourceTerms()
              "%s\n",
              "called prior to RANSBuo::setup()!");
 
-  mesh_t *mesh = nrs->meshV;
+  mesh_t *mesh = nrs->mesh;
   cds_t *cds = nrs->cds;
 
   occa::memory o_Tgrad = platform->o_memPool.reserve<dfloat>(nrs->NVfields * nrs->fieldOffset);
@@ -190,7 +190,7 @@ void RANSbuo::setup(dfloat mueIn, dfloat rhoIn, int ifld, dfloat RiIn, dfloat *g
   o_gvec = platform->device.malloc<dfloat>(3, gIn);
 
   cds_t *cds = nrs->cds;
-  mesh_t *mesh = nrs->meshV;
+  mesh_t *mesh = nrs->mesh;
 
   o_T = cds->o_S + cds->fieldOffsetScan[0];
   o_k = cds->o_S + cds->fieldOffsetScan[kFieldIndex];
