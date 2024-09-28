@@ -1,26 +1,8 @@
-@kernel void ktauBuoForce(const dlong N,
-                          const dlong offset,
-													const dfloat rho,
-                          const dfloat Ri,
-                          @ restrict const dfloat *g,
-                          @ restrict const dfloat *T,
-                          @ restrict dfloat *FU)
-{
-  for (dlong n = 0; n < N; ++n; @tile(p_blockSize, @outer, @inner)) {
-    if(n < N) {
-			const dfloat fac = -rho * Ri * T[n];
-      FU[n + 0 * offset] = fac * g[0];
-      FU[n + 1 * offset] = fac * g[1];
-      FU[n + 2 * offset] = fac * g[2];
-    }
-  }
-}
-
 @kernel void ktauBuoDiff(const dlong N,
                          const dfloat kc,
-												 const dfloat cp,
-                         @restrict const dfloat *mut,
-                         @restrict dfloat *diff)
+                         const dfloat cp,
+                         @ restrict const dfloat *mut,
+                         @ restrict dfloat *diff)
 {
   for (dlong n = 0; n < N; ++n; @tile(p_blockSize, @outer, @inner)) {
     if(n < N) {
@@ -40,27 +22,27 @@
                             @ restrict dfloat * SRCDIAG)
 {
   for (dlong n = 0; n < N; ++n; @tile(p_blockSize, @outer, @inner)) {
-		if(n < N){
-			const dfloat tau = TAU[n];
+    if(n < N){
+      const dfloat tau = TAU[n];
 
-			const dfloat mu_t0 = rho * p_alpinf_str * tau;
+      const dfloat mu_t0 = rho * p_alpinf_str * tau;
 
-			const dfloat t_x = Tgrad[n + 0 * offset];
-			const dfloat t_y = Tgrad[n + 1 * offset];
-			const dfloat t_z = Tgrad[n + 2 * offset];
+      const dfloat t_x = Tgrad[n + 0 * offset];
+      const dfloat t_y = Tgrad[n + 1 * offset];
+      const dfloat t_z = Tgrad[n + 2 * offset];
 
-			const dfloat flux = (t_x*g[0] + t_y*g[1] + t_z*g[2]) * p_iPrt * Ri;
+      const dfloat flux = (t_x*g[0] + t_y*g[1] + t_z*g[2]) * p_iPrt * Ri;
 
-			const dfloat kSrc = 0.0;            //mu_t0*flux*k
-			const dfloat kDiag = -mu_t0 * flux;
+      const dfloat kSrc = 0.0;            //mu_t0*flux*k
+      const dfloat kDiag = -mu_t0 * flux;
 
-			const dfloat G_w = rho * p_alp_inf * tau * flux;
+      const dfloat G_w = rho * p_alp_inf * tau * flux;
 
-			const dfloat tauSrc = 0.0;     //G_w*tau
-			const dfloat tauDiag = -G_w;
+      const dfloat tauSrc = 0.0;     //G_w*tau
+      const dfloat tauDiag = -G_w;
 
-			SRCDIAG[n + 0 * offset] = kDiag;
-			SRCDIAG[n + 1 * offset] = tauDiag;
-		}
-	}
+      SRCDIAG[n + 0 * offset] = kDiag;
+      SRCDIAG[n + 1 * offset] = tauDiag;
+    }
+  }
 }

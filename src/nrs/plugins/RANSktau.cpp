@@ -103,8 +103,6 @@ occa::properties RANSktau::RANSInfo(){return ktauInfo;}
 
 void RANSktau::buildKernel(occa::properties _kernelInfo)
 {
-  if(buildKernelCalled == 1) return;
-
   occa::properties kernelInfo;
   if (!kernelInfo.get<std::string>("defines/p_sigma_k").size()) {
     kernelInfo["defines/p_sigma_k"] = coeff[0];

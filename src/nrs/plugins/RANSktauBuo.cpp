@@ -33,8 +33,9 @@ static dfloat coeff[] = {
   1./0.85,         // inverse turbulent Prandtl number
   0.3              // Cs_buo
 };
+} //namespace
 
-occa::memory implicitBuo(double time, int scalarIdx)
+occa::memory RANSbuo::implicitBuo(double time, int scalarIdx)
 {
   mesh_t* mesh = nrs->mesh;
   auto o_implicitKtau = RANSktau::implicitK(time, scalarIdx);
@@ -51,8 +52,6 @@ occa::memory implicitBuo(double time, int scalarIdx)
   }
   return o_NULL;
 }
-
-} //namespace
 
 void RANSbuo::buildKernel(occa::properties _kernelInfo)
 {
@@ -171,7 +170,7 @@ void RANSbuo::updateSourceTerms()
 								o_implicitBuo);
 }
 
-void RANSbuo::setup(dfloat mueIn, dfloat rhoIn, int ifld, dfloat RiIn, dfloat *gIn)
+void RANSbuo::setup(int ifld, dfloat RiIn, dfloat *gIn)
 {
   nekrsCheck(!RANSktau::setup(),
              MPI_COMM_SELF,
@@ -183,8 +182,10 @@ void RANSbuo::setup(dfloat mueIn, dfloat rhoIn, int ifld, dfloat RiIn, dfloat *g
     return;
 
   nrs = dynamic_cast<nrs_t *>(platform->solver);
-  mueLam = mueIn;
-  rho = rhoIn;
+
+  platform->options.getArgs("VISCOSITY", mueLam);
+  platform->options.getArgs("DENSITY", rho);
+
   kFieldIndex = ifld;
   Ri = RiIn;
   o_gvec = platform->device.malloc<dfloat>(3, gIn);
@@ -197,11 +198,11 @@ void RANSbuo::setup(dfloat mueIn, dfloat rhoIn, int ifld, dfloat RiIn, dfloat *g
   o_tau = cds->o_S + cds->fieldOffsetScan[kFieldIndex + 1];
 
   o_implicitBuo = platform->device.malloc<dfloat>(2 * nrs->fieldOffset);
-  cds->userImplicitLinearTerm = implicitBuo;
+  cds->userImplicitLinearTerm = RANSbuo::implicitBuo;
 
-	dfloat rhoCp;
+  dfloat rhoCp;
   platform->options.getArgs("SCALAR00 DENSITY",rhoCp);
-	specificHeat = rhoCp / rho;	
+  specificHeat = rhoCp / rho;	
   platform->options.getArgs("SCALAR00 DIFFUSIVITY",conductivity);
 
   setupCalled = 1;

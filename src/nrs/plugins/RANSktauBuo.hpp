@@ -9,7 +9,8 @@ namespace RANSbuo
   void buildKernel(occa::properties kernelInfo);
   void updateProperties();
   void updateSourceTerms();
-  void setup(dfloat mue, dfloat rho, int startIndex, dfloat RiIn, dfloat *gIn);
+  void setup(int startIndex, dfloat RiIn, dfloat *gIn);
   void updateForce(occa::memory o_FU);
+  occa::memory implicitBuo(double time, int scalarIdx);
 }
 #endif
