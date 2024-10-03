@@ -78,8 +78,8 @@ static dfloat coeff[] = {
     0.856,     // sigom2
     0.44,      // gamma2
     //Free-stream limiter
-    0.01,      // edd_free
-    0.5,       // ywlim
+    0.0,       // edd_free //0.01 for external flows
+    0.0,       // ywlim    //0.5 for external flows
 
     //DES parameters
     0.78,      // cdes1
