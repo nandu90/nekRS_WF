@@ -174,20 +174,50 @@ void SSTBlendingFunc(const dfloat rho,
 
           const dfloat k2 = sqrt(kk);
           const dfloat ransL = k2 * (tau + p_tiny) / p_betainf_str;
+
           const dlong ide = n / p_Np;
           const dfloat hmax = DGRD[ide];
-          const dfloat xlesL = cdes * hmax;
-          const dfloat xnueff = (mue + mu_t) / rho;
+					dfloat dscle = hmax;
+					if(ifdes == 2){
+						const dfloat dscl1 = 0.15 * fmax(yw, hmax);
+						dscle = min(dscl1, hmax);
+					}
+          const dfloat xlesL = cdes * dscle;
+
           const dfloat omag2 = OMAG2[n];
           const dfloat sqStOm = sqrt(stMag2 + omag2);
           const dfloat ykap = p_vkappa * yw;
           const dfloat ykap2 = ykap * ykap;
           const dfloat denom_rd = ykap2 * sqStOm;
-          dfloat rd = 0.0;
-          if(denom_rd > p_tiny) rd = xnueff / denom_rd;
-          const dfloat cd12 = pow(p_cd1 * rd, p_cd2);
-          const dfloat fd = 1.0 - tanh(cd12);
-          const dfloat ddesL = ransL - fd * fmax(0.0, ransL - xlesL);
+					const dfloat xnut = mu_t / rho;
+					const dfloat xnul = mue / rho;
+          const dfloat xnueff = xnut + xnul;
+          dfloat rdt = 0.0;
+          if(denom_rd > p_tiny){
+						rdt = xnueff / denom_rd;
+						if(ifdes == 2) rdt = xnut / denom_rd;
+					}
+          const dfloat cd12 = pow(p_cd1 * rdt, p_cd2);
+          const dfloat fdt = 1.0 - tanh(cd12);
+          dfloat ddesL = ransL - fdt * fmax(0.0, ransL - xlesL);
+
+					if(ifdes == 2){
+						dfloat rdl = 0.0;
+						if(denom_rd > p_tiny) rdl = xnul / denom_rd;
+						const dfloat alcon = 0.25 - yw / hmax;
+						const dfloat alcon2 = alcon * alcon;
+						const dfloat fb1 = -9.0 * alcon2;
+						const dfloat fb = fmin(2.0 * exp(fb1), 1.0);
+						const dfloat fd = fmax(1 - fdt, fb);
+						dfloat fe1 = 2.0 * exp(fb1);
+						if(alcon > 0.0) fe1 = 2.0 * exp(-11.09 * alcon2);
+						const dfloat ft = tanh(pow(3.4969 * rdt, 3.0));
+						const dfloat fl = tanh(pow(25.0 * rdl, 10.0));
+						const dfloat fe2 = 1.0 - fmax(ft, fl);
+						const dfloat fe = fe2 * fmax(fe1 - 1.0, 0.0);
+
+						ddesL = fd * (1 + fe) * ransL + (1 - fd) * xlesL;
+					}
 
 					Y_k = 0.0;
           if(ddesL > 0.0) Y_k = rho * k2 / ddesL;

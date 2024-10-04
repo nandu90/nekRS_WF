@@ -259,7 +259,7 @@ void RANSktau::updateProperties()
 
   SijMag2OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, static_cast<int>(ifktau), o_SijOij, o_OiOjSk, o_SijMag2);
 
-  if(model == "SST+DES"){
+  if(model == "SST+DES" || model == "SST+IDDES"){
     auto o_Oij = o_SijOij.slice(6 * nrs->fieldOffset);
     platform->linAlg->magSqrVector(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_Oij, o_OijMag2);
   }
@@ -313,8 +313,10 @@ void RANSktau::updateSourceTerms()
   bool ifktau = 1;
   if(model != "KTAU") ifktau = 0;
 
-  bool ifdes = 1;
-  if(model != "SST+DES") ifdes = 0;
+  int ifdes = 0;
+  if(model == "SST+DES") ifdes = 1;
+	if(model == "SST+IDDES") ifdes = 2;
+
   if(ifdes){
     if(movingMesh) 
       desLenScaleKernel(mesh->Nelements,
@@ -328,7 +330,7 @@ void RANSktau::updateSourceTerms()
   computeKernel(mesh->Nelements * mesh->Np,
                 nrs->cds->fieldOffset[kFieldIndex],
                 static_cast<int>(ifktau),
-                static_cast<int>(ifdes),
+                ifdes,
                 rho,
                 mueLam,
                 o_k,
@@ -393,7 +395,7 @@ void RANSktau::setup(int ifld)
   o_xt = platform->device.malloc<dfloat>(nrs->fieldOffset);
   o_xtq = platform->device.malloc<dfloat>(nrs->fieldOffset);
 
-  if(model == "SST+DES"){
+  if(model == "SST+DES" || model == "SST+IDDES"){
     o_dgrd = platform->device.malloc<dfloat>(mesh->Nelements);
     o_OijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
     desLenScaleKernel(mesh->Nelements,
