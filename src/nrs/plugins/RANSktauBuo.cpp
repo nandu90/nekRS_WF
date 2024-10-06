@@ -24,7 +24,6 @@ static occa::memory o_implicitBuo;
 
 static occa::kernel diffKernel;
 static occa::kernel computeKernel;
-static occa::kernel forceKernel;
 
 static bool setupCalled = 0;
 static bool buildKernelCalled = 0;
@@ -89,21 +88,6 @@ void RANSbuo::buildKernel(occa::properties _kernelInfo)
 
   diffKernel = buildKernel("ktauBuoDiff");
   computeKernel = buildKernel("ktauBuoCompute");
-  forceKernel = buildKernel("ktauBuoForce");
-}
-
-void RANSbuo::updateForce(occa::memory o_FU)
-{
-  mesh_t *mesh = nrs->mesh;
-  cds_t *cds = nrs->cds;
-
-  forceKernel(mesh->Nlocal,
-              nrs->fieldOffset,
-							rho,
-              Ri,
-              o_gvec,
-              o_T,
-              o_FU);
 }
 
 void RANSbuo::updateProperties()

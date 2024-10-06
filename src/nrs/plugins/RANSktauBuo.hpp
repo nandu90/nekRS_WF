@@ -10,7 +10,6 @@ namespace RANSbuo
   void updateProperties();
   void updateSourceTerms();
   void setup(int startIndex, dfloat RiIn, dfloat *gIn);
-  void updateForce(occa::memory o_FU);
   occa::memory implicitBuo(double time, int scalarIdx);
 }
 #endif
