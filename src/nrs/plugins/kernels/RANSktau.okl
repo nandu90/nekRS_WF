@@ -180,7 +180,7 @@ void SSTBlendingFunc(const dfloat rho,
 					dfloat dscle = hmax;
 					if(ifdes == 2){
 						const dfloat dscl1 = 0.15 * fmax(yw, hmax);
-						dscle = min(dscl1, hmax);
+						dscle = fmin(dscl1, hmax);
 					}
           const dfloat xlesL = cdes * dscle;
 
