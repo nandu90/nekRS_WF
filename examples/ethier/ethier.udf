@@ -337,11 +337,6 @@ int timeStepConverged(int stage)
 
 void UDF_Setup()
 {
-  if (platform->options.getArgs("RESTART FILE NAME").empty()) {
-    nek::getIC();
-    nrs->copyFromNek();
-  }
-
   // only ciMode 1 exercises the particles
   if (ciMode == 1) {
 
@@ -494,6 +489,10 @@ void UDF_ExecuteStep(double time, int tstep)
     }
   }
 
+  if (ciMode == 23) {
+    ciCheckpointing(nrs);
+  }
+
   // only ciMode 1 exercises the particles path
   if (ciMode == 1) {
     particles->integrate(time);
@@ -507,7 +506,7 @@ void UDF_ExecuteStep(double time, int tstep)
     userMeshVelocity(mesh->Nlocal, nrs->fieldOffset, time, o_x0, o_y0, o_z0, mesh->o_U);
   }
 
-  if (nrs->isCheckpointStep) {
+  if (nrs->checkpointStep) {
     nrs->copyToNek(time, tstep);
     nek::userchk();
 

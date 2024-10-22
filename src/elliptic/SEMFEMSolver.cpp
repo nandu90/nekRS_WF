@@ -19,8 +19,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t *elliptic_)
   }
   fflush(stdout);
 
-  const auto mask = [&]() 
-  {
+  const auto mask = [&]() {
     std::vector<int> mask(mesh->Nlocal, 1);
     if (elliptic->Nmasked > 0) {
       std::vector<int> maskIds(elliptic->o_maskIds.size());
@@ -87,7 +86,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t *elliptic_)
                                                       matrix.Ai.data(),
                                                       matrix.Aj.data(),
                                                       matrix.Av.data(),
-                                                      (int)elliptic->allNeumann,
+                                                      (int)elliptic->nullspace,
                                                       platform->comm.mpiComm,
                                                       platform->device.occaDevice(),
                                                       useFP32,
@@ -99,7 +98,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t *elliptic_)
                                                 matrix.Ai.data(),
                                                 matrix.Aj.data(),
                                                 matrix.Av.data(),
-                                                (int)elliptic->allNeumann,
+                                                (int)elliptic->nullspace,
                                                 platform->comm.mpiComm,
                                                 1, /* Nthreads */
                                                 useFP32,
@@ -124,7 +123,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t *elliptic_)
                       matrix.Ai.data(),
                       matrix.Aj.data(),
                       matrix.Av.data(),
-                      (int)elliptic->allNeumann,
+                      (int)elliptic->nullspace,
                       platform->comm.mpiComm,
                       platform->device.id(),
                       useFP32,
@@ -167,8 +166,8 @@ void SEMFEMSolver_t::run(const occa::memory &o_r, occa::memory &o_z)
   const auto useDevice = elliptic->options.compareArgs("COARSE SOLVER LOCATION", "DEVICE");
   const dlong numRows = o_dofMap.size();
 
-  auto o_rT = platform->o_memPool.reserve<pfloat>(numRows);
-  auto o_zT = platform->o_memPool.reserve<pfloat>(numRows);
+  auto o_rT = platform->deviceMemoryPool.reserve<pfloat>(numRows);
+  auto o_zT = platform->deviceMemoryPool.reserve<pfloat>(numRows);
 
   static occa::kernel gatherKernel;
   if (!gatherKernel.isInitialized()) {
@@ -181,9 +180,13 @@ void SEMFEMSolver_t::run(const occa::memory &o_r, occa::memory &o_z)
 
     if (!useDevice) {
       static std::vector<pfloat> rT;
-      if (rT.size() < numRows) rT.resize(o_rT.size());
+      if (rT.size() < numRows) {
+        rT.resize(o_rT.size());
+      }
       static std::vector<pfloat> zT;
-      if (zT.size() < numRows) zT.resize(o_zT.size());
+      if (zT.size() < numRows) {
+        zT.resize(o_zT.size());
+      }
 
       o_rT.copyTo(rT.data());
       auto boomerAMG = (hypreWrapper::boomerAMG_t *)this->boomerAMG;
@@ -201,7 +204,6 @@ void SEMFEMSolver_t::run(const occa::memory &o_r, occa::memory &o_z)
   } else {
 
     nekrsAbort(platform->comm.mpiComm, EXIT_FAILURE, "%s\n", "Unknown solver!");
-
   }
 
   static occa::kernel scatterKernel;

@@ -270,14 +270,14 @@ static occa::memory meshSolve(nrs_t *nrs, double time, int iter)
   auto mesh = (nrs->cht) ? nrs->cds->mesh[0] : nrs->mesh;
   linAlg_t *linAlg = platform->linAlg;
 
-  auto o_rhs = platform->o_memPool.reserve<dfloat>(mesh->dim * nrs->fieldOffset);
+  auto o_rhs = platform->deviceMemoryPool.reserve<dfloat>(mesh->dim * nrs->fieldOffset);
   platform->linAlg->fill(mesh->dim * nrs->fieldOffset, 0, o_rhs);
 
   platform->timer.tic("meshSolve", 1);
 
   auto o_lambda0 = nrs->o_meshMue;
 
-  auto o_U = platform->o_memPool.reserve<dfloat>(mesh->dim * nrs->fieldOffset);
+  auto o_U = platform->deviceMemoryPool.reserve<dfloat>(mesh->dim * nrs->fieldOffset);
   if (platform->options.compareArgs("MESH INITIAL GUESS", "EXTRAPOLATION") && iter == 1) {
     o_U.copyFrom(mesh->o_Ue);
   } else {
@@ -417,7 +417,7 @@ void nrs_t::initInnerStep(double time, dfloat _dt, int tstep)
   if (this->flow) {
     platform->timer.tic("makef", 1);
 
-     platform->linAlg->fill(this->fieldOffset * this->NVfields, 0.0, this->o_NLT);
+    platform->linAlg->fill(this->fieldOffset * this->NVfields, 0.0, this->o_NLT);
 
     if (this->userVelocitySource) {
       platform->timer.tic("udfUEqnSource", 1);
@@ -520,27 +520,25 @@ void nrs_t::finishInnerStep()
 
 bool nrs_t::runStep(std::function<bool(int)> convergenceCheck, int iter)
 {
-  this->timeStepConverged = false;
+  timeStepConverged = false;
 
-  bool converged;
   if (platform->options.compareArgs("NEKNEK MULTIRATE TIMESTEPPER", "TRUE")) {
-    converged = runOuterStep(convergenceCheck, iter);
+    runOuterStep(convergenceCheck, iter);
   } else {
-    converged = runInnerStep(convergenceCheck, iter);
+    runInnerStep(convergenceCheck, iter, true);
   }
-  this->timeStepConverged = converged;
 
-  return this->timeStepConverged;
+  return timeStepConverged;
 }
 
-bool nrs_t::runInnerStep(std::function<bool(int)> convergenceCheck, int iter)
+bool nrs_t::runInnerStep(std::function<bool(int)> convergenceCheck, int iter, bool outerConverged)
 {
   this->outerCorrector = iter;
 
   const auto tstep = this->tstep;
   const double timeNew = this->timePrevious + setPrecision(this->dt[0], 5);
 
-  const int isCheckpointStep = this->isCheckpointStep;
+  const auto checkpointStep0 = checkpointStep;
 
   if (this->neknek) {
     this->neknek->updateBoundary(tstep, iter, timeNew);
@@ -617,21 +615,24 @@ bool nrs_t::runInnerStep(std::function<bool(int)> convergenceCheck, int iter)
     mesh->o_U.copyFrom(o_Unew, this->NVfields * this->fieldOffset);
   }
 
-  auto timeStepConverged = convergenceCheck(iter);
+  const auto converged = convergenceCheck(iter);
+
+  timeStepConverged = outerConverged && converged;
+
+  nek::ifoutfld(0);
+  checkpointStep = 0;
+  if (checkpointStep0 && timeStepConverged) {
+    nek::ifoutfld(1);
+    checkpointStep = 1;
+  }
 
   platform->timer.tic("udfExecuteStep", 1);
-  nek::ifoutfld(0);
-  this->isCheckpointStep = 0;
-  if (isCheckpointStep && timeStepConverged) {
-    nek::ifoutfld(1);
-    this->isCheckpointStep = 1;
-  }
   if (udf.executeStep) {
     udf.executeStep(timeNew, tstep);
   }
   platform->timer.toc("udfExecuteStep");
 
-  return timeStepConverged;
+  return converged;
 }
 
 void nrs_t::saveSolutionState()

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(NekRS LANGUAGES C CXX Fortran VERSION 24.0.2)
+project(NekRS LANGUAGES C CXX Fortran VERSION 24.0.4)
 
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
@@ -88,7 +88,6 @@ if(NOT USING_LLVM)
 endif()
 string(COMPARE EQUAL "${CMAKE_CXX_COMPILER_ID}" "AppleClang" USING_APPLE_LLVM)
 string(COMPARE EQUAL "${CMAKE_CXX_COMPILER_ID}" "NVHPC" USING_NVHPC)
-string(COMPARE EQUAL "${CMAKE_Fortran_COMPILER_ID}" "Flang" USING_FLANG)
 
 if(USING_GNU OR USING_LLVM OR USING_APPLE_LLVM)
   set(NEKRS_COMPILER_DEFAULT_FLAGS "-O2 -g -march=native -mtune=native -ftree-vectorize")
@@ -149,7 +148,7 @@ set(OCCA_ENABLE_METAL OFF CACHE BOOL "Enable OCCA Metal support")
 
 set(ENABLE_AMGX OFF CACHE BOOL "Enable NVIDIA AMGX support")
 set(ENABLE_HYPRE_GPU ON CACHE BOOL "Enable HYPRE GPU support")
-set(NEKRS_GPU_MPI ON CACHE BOOL "Enable GPU aware MPI")
+set(NEKRS_GPU_MPI OFF CACHE BOOL "Enable GPU aware MPI")
 set(ENABLE_CVODE OFF CACHE BOOL "Enable CVODE support")
 set(ENABLE_ADIOS ON CACHE BOOL "Enable ADIOS support")
 set(ADIOS2_INSTALL_DIR "" CACHE STRING "ADIOS install directory")
@@ -332,6 +331,11 @@ configure_file(
 configure_file(
   ${CMAKE_CURRENT_LIST_DIR}/cmake/nekrs.conf.in
   ${CMAKE_INSTALL_PREFIX}/nekrs.conf
+  @ONLY)
+
+configure_file(
+  ${CMAKE_CURRENT_LIST_DIR}/examples/CMakeLists.txt  # Input file
+  ${CMAKE_INSTALL_PREFIX}/examples/CMakeLists.txt  # Output file (build directory)
   @ONLY)
 
 file(MAKE_DIRECTORY ${CMAKE_INSTALL_PREFIX}/3rd_party)

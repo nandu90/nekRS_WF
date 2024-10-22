@@ -105,7 +105,7 @@ void SolutionProjection::updateProjectionSpace()
   // printf("norm_new:%g norm_orig:%g sumAlpha:%g\n", norm_new, norm_orig, sumAlpha);
   norm_new = sqrt(norm_new);
 
-  dfloat tol = 1e-6;
+  const dfloat tol = (sizeof(dfloat) == sizeof(double)) ? 1e-6: 1e-4;
   const dfloat test = norm_new / norm_orig;
   if (test > tol) {
     const dfloat scale = 1.0 / norm_new;
@@ -142,7 +142,6 @@ void SolutionProjection::computePreProjection(occa::memory &o_r)
   dfloat flopCount = 0.0;
 
   dfloat one = 1.0;
-  dfloat zero = 0.0;
   dfloat mone = -1.0;
   if (numVecsProjection <= 0) {
     return;
@@ -178,7 +177,7 @@ void SolutionProjection::computePreProjection(occa::memory &o_r)
 
   flopCount += Nfields * (1 + 2 * (numVecsProjection - 1)) * static_cast<double>(Nlocal);
   if (type == ProjectionType::CLASSIC) {
-    auto o_rtmp = platform->o_memPool.reserve<dfloat>(Nfields * fieldOffset);
+    auto o_rtmp = platform->deviceMemoryPool.reserve<dfloat>(Nfields * fieldOffset);
     accumulateKernel(Nlocal, numVecsProjection, fieldOffset, o_alpha, o_bb, o_rtmp);
     platform->linAlg->axpbyMany(Nlocal, Nfields, fieldOffset, mone, o_rtmp, one, o_r);
 
@@ -194,20 +193,19 @@ void SolutionProjection::computePreProjection(occa::memory &o_r)
 void SolutionProjection::computePostProjection(occa::memory &o_x)
 {
   const dfloat one = 1.0;
-  const dfloat zero = 0.0;
 
   if (numVecsProjection == 0) {
     // reset bases
     numVecsProjection = 1;
-    o_xx.copyFrom(o_x, Nfields * fieldOffset);
+    o_xx.copyFrom(o_x, o_x.size());
   } else if (numVecsProjection == maxNumVecsProjection) {
     numVecsProjection = 1;
     platform->linAlg->axpbyMany(Nlocal, Nfields, fieldOffset, one, o_xbar, one, o_x);
-    o_xx.copyFrom(o_x, Nfields * fieldOffset);
+    o_xx.copyFrom(o_x, o_x.size());
   } else {
     numVecsProjection++;
     // xx[m-1] = x
-    o_xx.copyFrom(o_x, fieldOffset * Nfields, fieldOffset * Nfields * (numVecsProjection - 1), 0);
+    o_xx.copyFrom(o_x, o_x.size(), fieldOffset * Nfields * (numVecsProjection - 1), 0);
     // x = x + xbar
     platform->linAlg->axpbyMany(Nlocal, Nfields, fieldOffset, one, o_xbar, one, o_x);
   }
@@ -218,8 +216,7 @@ void SolutionProjection::computePostProjection(occa::memory &o_x)
   updateProjectionSpace();
   if (numVecsProjection < previousNumVecsProjection) { // Last vector was linearly dependent, reset space
     numVecsProjection = 1;
-    o_xx.copyFrom(o_x,
-                  Nfields * fieldOffset); // writes first n words of o_xx, first approximation vector
+    o_xx.copyFrom(o_x, o_x.size());
     matvec(o_bb, 0, o_xx, 0);
     updateProjectionSpace();
   }

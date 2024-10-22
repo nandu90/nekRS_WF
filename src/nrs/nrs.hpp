@@ -46,7 +46,8 @@ public:
 
   int elementType = HEXAHEDRA;
 
-  mesh_t* mesh = nullptr;
+  mesh_t *mesh = nullptr;
+  mesh_t *meshV = nullptr; 
 
   elliptic *uSolver = nullptr;
   elliptic *vSolver = nullptr;
@@ -94,7 +95,7 @@ public:
   int tstep = 0;
   int lastStep = 0;
   int outerCorrector = 1;
-  int isCheckpointStep = 0;
+  int checkpointStep = 0;
   int outputForceStep = 0;
 
   int Nsubsteps = 0;
@@ -254,14 +255,15 @@ public:
 
   void copyFromNek(double &time);
   void copyFromNek();
+  void getICFromNek();
 
 private:
   void initInnerStep(double time, dfloat dt, int tstep);
-  bool runInnerStep(std::function<bool(int)> convergenceCheck, int stage);
+  bool runInnerStep(std::function<bool(int)> convergenceCheck, int stage, bool outerConverged);
   void finishInnerStep();
 
   void initOuterStep(double time, dfloat dt, int tstep);
-  bool runOuterStep(std::function<bool(int)> convergenceCheck, int stage);
+  void runOuterStep(std::function<bool(int)> convergenceCheck, int stage);
   void finishOuterStep();
 
   int tStepOuterStart;

@@ -3,50 +3,61 @@
 ## What is new? 
 
 * FP32 solver mode
+* DPCPP backend to support Intel GPUs
 * Interpolation based velocity recycling
 * [Ascent](https://ascent.readthedocs.io/en/latest/) in situ visualisation plugin
 * iofld class reading/writing field files including [ADIOS2](https://adios2.readthedocs.io/) support 
 * Addtional output options (element filter and interpolation on uniform grid / different polynomial-order)
 * Multi session nek-nek including multi-rate time stepping
+* Improved memory management
 * CHT nek-nek support
 * nek-nek support for nrsqsub scripts
 * Improved JIT compilation performance
-* HIP support for BoomerAMG
-* Intel GPU support
+* HIP support for SEMFEM  
 * Aero forces
 * opSEM class
 * Mesh surface ops
 * Linear implicit velocity source term
-* Combined CG for improved performance
 * Various bug fixes
 
 ## Good to know
 
-* HYPRE replaces AmgX
-* [reproducibility] variable time step controller restricts dt to 5 significant digits
 * after fixing a bug in the linear solver residual norm, iteration counts have increased compared to previous versions
+* GPU aware MPI is disabled by default (`NEKRS_GPU_MPI=0`)
+* [reproducibility] variable time step controller restricts dt to 5 significant digits
+* nrsman <par, env>  can be used to display the par file or environment settings
+* HYPRE replaces AmgX
+* Field file extension starts with 0-index
 
 ## Breaking Changes
 
 This list provides an overview of the most significant changes in this release, although it may not encompass all modifications. We acknowledge that this release introduces several breaking changes. These adjustments were essential to enhance the stability of the user interface in future iterations. We apologize for any inconvenience this may cause.
 
 * run `build.sh` instead of `nrsconfig` to build the code
-* change par section `TEMPERATURE` to `SCALAR00` in case it does not represent indeed a physical temperature (e.g. lowMach or CHT)
-* `scalarDirichletConditions` -> `codedFixedValueVelocity` (same for scalars)
-* `scalarNeumannConditions` -> `codedFixedGradientVelocity` (same for scalars)
-* `useric` of nek5000 is no longer automatically called, instead call it in `UDF_Setup` (see e.g. lowMach example)
-* use `nrs->o_U` instead of `nrs->U` (host version was removed) 
-* use `cds->o_S` instead of `cds->S` (host version was removed)
-* use `mesh->o_x` instead of `mesh->x` (host version was removed, same for other components) 
-* `nrs->meshV` -> `nrs->mesh`
-* `nrs->_mesh` -> `cds->mesh[0]`
-* `nek::userchk` is no longer called automatically during setup 
-* `nek::copyToNek` -> `nrs->copyToNek` (same for all other variants) 
-* send signal (defined in env-var `NEKRS_SIGNUM_UPD`) to process trigger file `nekrs.upd` (no automatic check every N steps)
-* use `auto foo = platform->o_memPool.reserve<T>(nWords)` instead of preallocated slices of `occa::memory::o_mempool`
+* change par section `SCALAR00` to `TEMPERATURE` in case it represent indeed a physical temperature
+* `nek::userchk` is no longer called automatically during the setup phase 
+* host mirrored variables including `nrs->U, cds->S, mesh->x, nrs->usrwrk` have been removed 
+* send signal (defined in env-var `NEKRS_SIGNUM_UPD`) to process trigger file `nekrs.upd`
+* use `auto foo = platform->deviceMemoryPool.reserve<T>(nWords)` instead of pre-allocated dfloat slices like `platform->o_mempool.slice0`
 * change count argument of `occa::memory::slice, occa::memory::copyFrom, occa::memory::copyTo` to number of words instead of bytes 
+* use `nekrs_registerPtr` instead of common blocks NRSSCPTR / SCNRS in usr file and access them using `nek::ptr` in udf (see examples)
+
+### Name Changes
+* `velocityDirichletConditions` -> `codedFixedValueVelocity` (same for scalars)
+* `velocityNeumannConditions` -> `codedFixedGradientVelocity` (same for scalars)
+* `nrs->_mesh` -> `cds->mesh[0]`
+* `nek::ocopyToNek` -> `nrs->copyToNek`
+* `nek::ocopyFromNek` -> `nrs->copyFromNek`
+* `nrs->o_FU` -> `nrs->o_NLT`
+* `cds->o_FS` -> `cds->o_NLT`
+* `occaKernel` -> `deviceKernel`
+* `occaProperties` > `deviceKernelProperties`
+* `occa::memory` -> `deviceMemory` 
+* `nrs->isOutputStep` -> `nrs->checkpointStep`
+
+### Interface Changes 
 * define `time` as double (instead of defloat) in all UDF functions
-* remove `nrs_t` argument from UDF API functions (nrs object is now globally accessible within udf if the Navier Stokes solver is enabled)
+* remove `nrs_t` argument from all UDF functions (nrs object is now globally accessible within udf if the Navier Stokes solver is enabled)
 * `nrs_t::userProperties = std::function<void(double)>` -> `udf::properties = std::function<void(nrs_t *, dfloat, occa::memory, occa::memory, occa::memory, occa::memory)>`
 * `nrs_t::userVelocitySource = std::function<void(double)>` -> `udf::uEqnSource = std::function<void(nrs_t *, dfloat, occa::memory, occa::memory)>`
 * `nrs_t::userScalarSource = std::function<void(double)>` -> `udf::sEqnSource = std::function<void(nrs_t *, dfloat, occa::memory, occa::memory)>`
@@ -54,22 +65,10 @@ This list provides an overview of the most significant changes in this release, 
 * `nrs_t::userDivergence = std::function<void(double)>` -> `udf::udfdif = std::function<void(nrs_t *, dfloat, occa::memory)>`
 * `tavg::setup(dlong fieldOffset, const fields& fields)` -> `tavg::setup(nrs_t*)`
 * `planarAvg(mesh_t*, const std::string&, int, int, int, int, dlong, occa::memory o_avg)` -> `postProcessing::planarAvg(nrs_t*, const std::string&, int, int, int, int, occa::memory)`
-* `nrs->o_NLT` -> `nrs->o_FU`
-* `cds->o_NLT` ->  `cds->o_FS`
 * `::postProcessing` functions are now members of `nrs_t` (except planarAvg)
-* use `nekrs_registerPtr` instead of common blocks NRSSCPTR / SCNRS in usr file and access them using `nek::ptr` in udf (see e.g. channel example)
-* `occaKernel` -> `deviceKernel`
-* `occaProperties` > `deviceKernelProperties`
-* `occa::memory` -> `deviceMemory` 
 * remove `nrs_t` argument from `<plugin>::setup`
-* `nrs->isOutputStep` -> `nrs->isCheckpointStep`
 * `pointInterpolation_t::setPoints(int, dfloat*, dfloat*, dfloat*)` -> `pointInterpolation_t::setPoints(const std::vector<dfloat>&, const std::vector<dfloat>&, const std::vector<dfloat>&)`
-* use `iofld` class instead of `writeFld`
-* `nrs->usrwrk` was removed (it's a user variable not used anywhere in the code)
-* field file extension start with 0-index
-* `nek::copyToNek` -> `nrs->copyToNek`
-* `nek::copyFromNek` -> `nrs->copyFromNek`
-* `nek::ocopyFromNek` and `nek::ocopyToNek` was removed 
+* use `iofld` instead of `writeFld`
 
 ## Known Bugs / Restrictions
 
@@ -80,7 +79,7 @@ This list provides an overview of the most significant changes in this release, 
 
 ## Thanks to our Contributors
 
-@kris-rowe, @yslan, @MalachiTimothyPhillips, @tcew
+@kris-rowe, @tcew, @yslan, @MalachiTimothyPhillips, @thilinarmtb
 
 We are grateful to all who added new features, filed issues or helped resolve them, 
 asked and answered questions, and were part of inspiring discussions.

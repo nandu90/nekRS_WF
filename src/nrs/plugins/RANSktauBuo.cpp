@@ -119,7 +119,7 @@ void RANSbuo::updateSourceTerms()
   mesh_t *mesh = nrs->mesh;
   cds_t *cds = nrs->cds;
 
-  occa::memory o_Tgrad = platform->o_memPool.reserve<dfloat>(nrs->NVfields * nrs->fieldOffset);
+  occa::memory o_Tgrad = platform->deviceMemoryPool.reserve<dfloat>(nrs->NVfields * nrs->fieldOffset);
 
   nrs->gradientVolumeKernel(mesh->Nelements,
                             mesh->o_vgeo,

@@ -94,8 +94,12 @@ static dfloat coeff[] = {
 
 occa::memory RANSktau::implicitK(double time, int scalarIdx)
 {
-  if (scalarIdx == kFieldIndex) return o_implicitKtau.slice(0 * nrs->fieldOffset, nrs->fieldOffset);
-  if (scalarIdx == kFieldIndex + 1) return o_implicitKtau.slice(1 * nrs->fieldOffset, nrs->fieldOffset);
+  if (scalarIdx == kFieldIndex) {
+    return o_implicitKtau.slice(0 * nrs->fieldOffset, nrs->fieldOffset);
+  }
+  if (scalarIdx == kFieldIndex + 1) {
+    return o_implicitKtau.slice(1 * nrs->fieldOffset, nrs->fieldOffset);
+  }
   return o_NULL;
 }
 
@@ -369,17 +373,23 @@ void RANSktau::setup(int ifld)
 
     const std::string sid = scalarDigitStr(kFieldIndex + i);
     nekrsCheck(!platform->options.getArgs("SCALAR" + sid + " DIFFUSIVITY").empty() ||
-               !platform->options.getArgs("SCALAR" + sid + " DENSITY").empty(),
-               platform->comm.mpiComm, EXIT_FAILURE, "%s\n", "illegal property specificition for k/tau in par!");
+                   !platform->options.getArgs("SCALAR" + sid + " DENSITY").empty(),
+               platform->comm.mpiComm,
+               EXIT_FAILURE,
+               "%s\n",
+               "illegal property specificition for k/tau in par!");
   }
 
   auto cds = nrs->cds;
-  auto mesh = nrs->mesh;
+	auto mesh = nrs->mesh;
 
   movingMesh = platform->options.compareArgs("MOVING MESH", "TRUE");
 
-  nekrsCheck(cds->NSfields < kFieldIndex+1, platform->comm.mpiComm, EXIT_FAILURE, 
-    "%s\n", "number of scalar fields too low!");
+  nekrsCheck(cds->NSfields < kFieldIndex + 1,
+             platform->comm.mpiComm,
+             EXIT_FAILURE,
+             "%s\n",
+             "number of scalar fields too low!");
 
   o_k = cds->o_S + cds->fieldOffsetScan[kFieldIndex];
   o_tau = cds->o_S + cds->fieldOffsetScan[kFieldIndex + 1];

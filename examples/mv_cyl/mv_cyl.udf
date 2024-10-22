@@ -103,11 +103,6 @@ void UDF_Setup()
   nrs->userProperties = &uservp;
   nrs->userScalarSource = &userq;
 
-  if (platform->options.getArgs("RESTART FILE NAME").empty()) {
-    nek::getIC();
-    nrs->copyFromNek();
-  }
-
   o_beta.resize(nrs->fieldOffset);
   o_kappa.resize(nrs->fieldOffset);
 
@@ -148,7 +143,7 @@ void UDF_ExecuteStep(double time, int tstep)
                      mesh->o_U);
   }
 
-  if (nrs->isCheckpointStep) {
+  if (nrs->checkpointStep) {
     nrs->copyToNek(time, tstep);
     nek::userchk();
   }
