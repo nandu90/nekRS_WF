@@ -383,7 +383,6 @@ void udfBuild(setupAide &options)
           // autoload plugins
           std::map<std::string, std::string> pluginTable = {
               {"nekrs_tavg_hpp_", "tavg::buildKernel"},
-              {"nekrs_RANSktauBuo_hpp_", "RANSbuo::buildKernel"},
               {"nekrs_RANSktau_hpp_", "RANSktau::buildKernel"},
               {"nekrs_lowMach_hpp_", "lowMach::buildKernel"},
               {"nekrs_velRecycling_hpp_", "velRecycling::buildKernel"},

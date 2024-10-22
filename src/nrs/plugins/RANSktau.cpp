@@ -92,7 +92,7 @@ static dfloat coeff[] = {
 } // namespace
 
 
-occa::memory RANSktau::implicitK(double time, int scalarIdx)
+occa::memory implicitK(double time, int scalarIdx)
 {
   if (scalarIdx == kFieldIndex) {
     return o_implicitKtau.slice(0 * nrs->fieldOffset, nrs->fieldOffset);
@@ -102,8 +102,6 @@ occa::memory RANSktau::implicitK(double time, int scalarIdx)
   }
   return o_NULL;
 }
-
-occa::properties RANSktau::RANSInfo(){return ktauInfo;}
 
 void RANSktau::buildKernel(occa::properties _kernelInfo)
 {
@@ -397,7 +395,7 @@ void RANSktau::setup(int ifld)
   o_mut = platform->device.malloc<dfloat>(cds->fieldOffset[kFieldIndex]);
 
   o_implicitKtau = platform->device.malloc<dfloat>(2 * nrs->fieldOffset);
-  cds->userImplicitLinearTerm = RANSktau::implicitK;
+  cds->userImplicitLinearTerm = implicitK;
 
   if(model == "KTAU") o_OiOjSk = platform->device.malloc<dfloat>(nrs->fieldOffset);
   o_SijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
@@ -460,4 +458,3 @@ void RANSktau::setup(int ifld, std::string &modelIn, occa::memory &o_ywdIn)
   RANSktau::setup(ifld);
 }
 
-bool RANSktau::setup(){return setupCalled;}

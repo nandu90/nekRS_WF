@@ -13,9 +13,6 @@ void setup(int startFieldIndex, std::string &model);
 void setup(int startFieldIndex, std::string &model, occa::memory &o_ywd);
 void updateProperties();
 const deviceMemory<dfloat> o_mue_t();
-occa::memory implicitK(double time, int scalarIdx);
-bool setup();
-occa::properties RANSInfo();
 }
 
 #endif
