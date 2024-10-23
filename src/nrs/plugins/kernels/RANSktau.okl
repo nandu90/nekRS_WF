@@ -14,7 +14,7 @@ void SSTBlendingFunc(const dfloat rho,
   const dfloat iyd2 = iyd * iyd;
 
   const dfloat k2 = sqrt(k);
-	const dfloat nu = mueLam / rho;
+  const dfloat nu = mueLam / rho;
   const dfloat crit = yw * k2 / (500.0 * nu * p_betainf_str);
   dfloat arg1_1 = 500.0 * p_beta0_SST / 6.0;
   dfloat f2 = 1.0;
@@ -70,7 +70,7 @@ void SSTBlendingFunc(const dfloat rho,
       const dfloat tau = TAU[n];
 
       dfloat mut = 0.0;
-			dfloat sigk, sigom;
+      dfloat sigk, sigom;
       if(ifktau){
         mut = rho * p_alpinf_str * k * tau;
         sigk = p_sigma_k;
@@ -80,7 +80,7 @@ void SSTBlendingFunc(const dfloat rho,
         const dfloat yw = YWD[n];
         const dfloat stmag2 = STMAG2[n];
         const dfloat xk = XK[n];
-				dfloat f1 = 1.0;
+	dfloat f1 = 1.0;
         SSTBlendingFunc(rho, mueLam, k, tau, stmag2, xk, yw, f1, mut);
         const dfloat f11 = 1.0 - f1;
         sigk = f1 * p_sigmak_SST + f11 * p_sigk2;
@@ -137,7 +137,7 @@ void SSTBlendingFunc(const dfloat rho,
       if(ifktau){
         mu_t = rho * p_alpinf_str * kk * tau;
         dfloat sigd = p_sigd_min;
-				dfloat f_beta_str = 1.0;
+	dfloat f_beta_str = 1.0;
         if (xk > 0) {
           const dfloat xk3 = xk * xk * tau * tau;
           sigd = p_sigd_max;
@@ -145,7 +145,7 @@ void SSTBlendingFunc(const dfloat rho,
         }
         const dfloat x_w = fabs(OiOjSk) * (tau * tau * tau * p_ibetainf_str3);
         const dfloat f_b = (p_pope) ? (1.0 + p_fb_c1 * x_w) / (1.0 + p_fb_c2 * x_w) : 1.0;
-
+	
         Y_k = rho * p_betainf_str * f_beta_str * itau;
         Y_w = -rho * p_beta0 * f_b;
         S_w0 = -rho * sigd *xk;
@@ -157,7 +157,7 @@ void SSTBlendingFunc(const dfloat rho,
         const dfloat yw = YWD[n];
         dfloat f1 = 1.0;
         SSTBlendingFunc(rho, mue, kk, tau, stMag2, xk, yw, f1, mu_t);
-
+	
         const dfloat mu_min = p_edd_free * mue;
         if(mu_t < mu_min && yw > p_ywlim) 
           Rfact = mu_t / mu_min;
@@ -166,9 +166,9 @@ void SSTBlendingFunc(const dfloat rho,
         beta = f1 * p_beta0_SST + f11 * p_beta2;
         const dfloat gamma = f1 * p_alpinf_SST + f11 * p_gamma2;
         sigom = f1 * p_sigma_tau + f11 * p_sigom2;
-
-				Y_k = rho * p_betainf_str * itau;
-
+	
+	Y_k = rho * p_betainf_str * itau;
+				
         if(ifdes){
           const dfloat cdes = f1 * p_cdes1 + f11 * p_cdes2;
 
@@ -177,11 +177,11 @@ void SSTBlendingFunc(const dfloat rho,
 
           const dlong ide = n / p_Np;
           const dfloat hmax = DGRD[ide];
-					dfloat dscle = hmax;
-					if(ifdes == 2){
-						const dfloat dscl1 = 0.15 * fmax(yw, hmax);
-						dscle = fmin(dscl1, hmax);
-					}
+	  dfloat dscle = hmax;
+	  if(ifdes == 2){
+	    const dfloat dscl1 = 0.15 * fmax(yw, hmax);
+	    dscle = fmin(dscl1, hmax);
+	  }
           const dfloat xlesL = cdes * dscle;
 
           const dfloat omag2 = OMAG2[n];
@@ -189,43 +189,43 @@ void SSTBlendingFunc(const dfloat rho,
           const dfloat ykap = p_vkappa * yw;
           const dfloat ykap2 = ykap * ykap;
           const dfloat denom_rd = ykap2 * sqStOm;
-					const dfloat xnut = mu_t / rho;
-					const dfloat xnul = mue / rho;
+	  const dfloat xnut = mu_t / rho;
+	  const dfloat xnul = mue / rho;
           const dfloat xnueff = xnut + xnul;
           dfloat rdt = 0.0;
           if(denom_rd > p_tiny){
-						rdt = xnueff / denom_rd;
-						if(ifdes == 2) rdt = xnut / denom_rd;
-					}
+	    rdt = xnueff / denom_rd;
+	    if(ifdes == 2) rdt = xnut / denom_rd;
+	  }
           const dfloat cd12 = pow(p_cd1 * rdt, p_cd2);
           const dfloat fdt = 1.0 - tanh(cd12);
           dfloat ddesL = ransL - fdt * fmax(0.0, ransL - xlesL);
-
-					if(ifdes == 2){
-						dfloat rdl = 0.0;
-						if(denom_rd > p_tiny) rdl = xnul / denom_rd;
-						const dfloat alcon = 0.25 - yw / hmax;
-						const dfloat alcon2 = alcon * alcon;
-						const dfloat fb1 = -9.0 * alcon2;
-						const dfloat fb = fmin(2.0 * exp(fb1), 1.0);
-						const dfloat fd = fmax(1 - fdt, fb);
-						dfloat fe1 = 2.0 * exp(fb1);
-						if(alcon > 0.0) fe1 = 2.0 * exp(-11.09 * alcon2);
-						const dfloat ft = tanh(pow(3.4969 * rdt, 3.0));
-						const dfloat fl = tanh(pow(25.0 * rdl, 10.0));
-						const dfloat fe2 = 1.0 - fmax(ft, fl);
-						const dfloat fe = fe2 * fmax(fe1 - 1.0, 0.0);
-
-						ddesL = fd * (1 + fe) * ransL + (1 - fd) * xlesL;
-					}
-
-					Y_k = 0.0;
+	  
+	  if(ifdes == 2){
+	    dfloat rdl = 0.0;
+	    if(denom_rd > p_tiny) rdl = xnul / denom_rd;
+	    const dfloat alcon = 0.25 - yw / hmax;
+	    const dfloat alcon2 = alcon * alcon;
+	    const dfloat fb1 = -9.0 * alcon2;
+	    const dfloat fb = fmin(2.0 * exp(fb1), 1.0);
+	    const dfloat fd = fmax(1 - fdt, fb);
+	    dfloat fe1 = 2.0 * exp(fb1);
+	    if(alcon > 0.0) fe1 = 2.0 * exp(-11.09 * alcon2);
+	    const dfloat ft = tanh(pow(3.4969 * rdt, 3.0));
+	    const dfloat fl = tanh(pow(25.0 * rdl, 10.0));
+	    const dfloat fe2 = 1.0 - fmax(ft, fl);
+	    const dfloat fe = fe2 * fmax(fe1 - 1.0, 0.0);
+	    
+	    ddesL = fd * (1 + fe) * ransL + (1 - fd) * xlesL;
+	  }
+	  
+	  Y_k = 0.0;
           if(ddesL > 0.0) Y_k = rho * k2 / ddesL;
         }
         Y_w = -rho * beta * Rfact;
         S_w0 = -2.0 * rho * p_sigom2 * f11 * xk * Rfact;
         G_wp = rho * gamma * tau * 2.0 * stMag2 * Rfact;
-			}
+      }
 
       const dfloat kSrc = fmin(mu_t * 2*stMag2, 10.0f * Y_k * kk);
       const dfloat kDiag = Y_k;
@@ -264,18 +264,18 @@ void SSTBlendingFunc(const dfloat rho,
       dfloat tau = TAU[n];
       if(k < 0) k = 0.001 * fabs(k);
       if(tau < 0) tau = 0.001 * fabs(tau);
-
+      
       K[n] = k;
       TAU[n] = tau;
     }
 }
 
 @kernel void SijMag2OiOjSk(const dlong N,
-                        const dlong offset,
-                        const dlong ifOij,
-                        @ restrict const dfloat *SOIJ,
-                        @ restrict dfloat *OIOJSK,
-                        @ restrict dfloat *MAGSIJ)
+			   const dlong offset,
+			   const dlong ifOij,
+			   @ restrict const dfloat *SOIJ,
+			   @ restrict dfloat *OIOJSK,
+			   @ restrict dfloat *MAGSIJ)
 {
   for (dlong n = 0; n < N; ++n; @tile(p_blockSize, @outer, @inner))
     if (n < N) {
@@ -298,18 +298,18 @@ void SSTBlendingFunc(const dfloat rho,
                               2 * (o1 * o2 * s4 + o2 * o3 * s5 - o1 * o3 * s6);
         OIOJSK[n] = 8*OiOjSk;
       }
-   }
+    }
 }
 
 @kernel void RANSGradHex3D(const dlong Nelements,
-			       const dlong offset,
-			       @ restrict const dfloat *vgeo,
-			       @ restrict const dfloat *D,
-			       @ restrict const dfloat *K,
-			       @ restrict const dfloat *TAU,
-			       @ restrict dfloat *XK,
-			       @ restrict dfloat *XT,
-			       @ restrict dfloat *XTQ)
+			   const dlong offset,
+			   @ restrict const dfloat *vgeo,
+			   @ restrict const dfloat *D,
+			   @ restrict const dfloat *K,
+			   @ restrict const dfloat *TAU,
+			   @ restrict dfloat *XK,
+			   @ restrict dfloat *XT,
+			   @ restrict dfloat *XTQ)
 {
   for (dlong e = 0; e < Nelements; ++e; @outer(0)) {
     @shared dfloat s_k[p_Nq][p_Nq];

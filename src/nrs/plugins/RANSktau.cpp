@@ -11,10 +11,11 @@ namespace
 static nrs_t *nrs;
 
 int kFieldIndex;
-static std::string model = "KTAU";
+static std::string model = "KTAU"; //default model
 
 static dfloat rho;
 static dfloat mueLam;
+static dfloat conductivity;
 
 static occa::memory o_mut;
 
@@ -43,8 +44,6 @@ static occa::kernel SijMag2OiOjSkKernel;
 
 static std::vector<int> wbID;
 static occa::memory o_wbID;
-
-static occa::properties ktauInfo;
 
 static bool setupCalled = false;
 static bool buildKernelCalled = false;
@@ -86,7 +85,7 @@ static dfloat coeff[] = {
     0.61,      // cdes2
     20.0,      // c_d1
     3.0,       // c_d2
-    0.41      // vkappa
+    0.41       // vkappa
 };
 
 } // namespace
@@ -200,14 +199,13 @@ void RANSktau::buildKernel(occa::properties _kernelInfo)
   if (!kernelInfo.get<std::string>("defines/p_vkappa").size()) {
     kernelInfo["defines/p_vkappa"] = coeff[29];
   }
+
   const int verbose = platform->options.compareArgs("VERBOSE", "TRUE") ? 1 : 0;
 
   if (platform->comm.mpiRank == 0 && verbose) {
     std::cout << "\nRANSktau settings\n";
     std::cout << kernelInfo << std::endl;
   }
-
-  ktauInfo = kernelInfo;
 
   kernelInfo += _kernelInfo;
 
@@ -250,10 +248,11 @@ void RANSktau::updateProperties()
   auto mesh = nrs->mesh;
   auto cds = nrs->cds;
 
-  occa::memory o_mue = nrs->o_mue;
-  occa::memory o_diff = cds->o_diff + cds->fieldOffsetScan[kFieldIndex];
+  auto o_mue = nrs->o_mue;
+  auto o_diff = cds->o_diff + cds->fieldOffsetScan[kFieldIndex];
 
   limitKernel(mesh->Nelements * mesh->Np, o_k, o_tau);
+  
   auto o_SijOij = nrs->strainRotationRate();
 
   bool ifktau = 1;
@@ -261,7 +260,7 @@ void RANSktau::updateProperties()
 
   SijMag2OiOjSkKernel(mesh->Nelements * mesh->Np, nrs->fieldOffset, static_cast<int>(ifktau), o_SijOij, o_OiOjSk, o_SijMag2);
 
-  if(model == "SST+DES" || model == "SST+IDDES"){
+  if(model == "SST+DDES" || model == "SST+IDDES"){
     auto o_Oij = o_SijOij.slice(6 * nrs->fieldOffset);
     platform->linAlg->magSqrVector(mesh->Nelements * mesh->Np, nrs->fieldOffset, o_Oij, o_OijMag2);
   }
@@ -308,16 +307,16 @@ void RANSktau::updateSourceTerms()
              "called prior to RANSktau::setup()!");
 
   auto mesh = nrs->mesh;
-  cds_t *cds = nrs->cds;
+  auto cds = nrs->cds;
 
-  occa::memory o_FS = cds->o_NLT + cds->fieldOffsetScan[kFieldIndex];
+  auto o_FS = cds->o_NLT + cds->fieldOffsetScan[kFieldIndex];
 
   bool ifktau = 1;
   if(model != "KTAU") ifktau = 0;
 
-  int ifdes = 0;
-  if(model == "SST+DES") ifdes = 1;
-	if(model == "SST+IDDES") ifdes = 2;
+  int ifdes = 0; //DES model type
+  if(model == "SST+DDES") ifdes = 1;
+  if(model == "SST+IDDES") ifdes = 2;
 
   if(ifdes){
     if(movingMesh) 
@@ -357,12 +356,21 @@ void RANSktau::setup(int ifld)
   }
   isInitialized = true;
 
+  nekrsCheck(model != "KTAU" &&
+	     model != "SST" &&
+	     model != "SST+DDES" &&
+	     model != "SST+IDDES",
+	     platform->comm.mpiComm,
+	     EXIT_FAILURE,
+	     "%s\n",
+	     "RANS model not supported!\nAvailable RANS models are:\nKTAU\nSST\nSST+DDES\nSST+IDDES");
+
   nrs = dynamic_cast<nrs_t *>(platform->solver);
   kFieldIndex = ifld; // tauFieldIndex is assumed to be kFieldIndex+1
 
   platform->options.getArgs("VISCOSITY", mueLam);
   platform->options.getArgs("DENSITY", rho);
-
+  
   for (int i = 0; i < 2; i++) {
     auto cds = nrs->cds;
     auto mesh = (kFieldIndex + i) ? cds->meshV : cds->mesh[0]; // only first scalar can be a CHT mesh
@@ -379,7 +387,7 @@ void RANSktau::setup(int ifld)
   }
 
   auto cds = nrs->cds;
-	auto mesh = nrs->mesh;
+  auto mesh = nrs->mesh;
 
   movingMesh = platform->options.compareArgs("MOVING MESH", "TRUE");
 
@@ -403,7 +411,7 @@ void RANSktau::setup(int ifld)
   o_xt = platform->device.malloc<dfloat>(nrs->fieldOffset);
   o_xtq = platform->device.malloc<dfloat>(nrs->fieldOffset);
 
-  if(model == "SST+DES" || model == "SST+IDDES"){
+  if(model == "SST+DDES" || model == "SST+IDDES"){
     o_dgrd = platform->device.malloc<dfloat>(mesh->Nelements);
     o_OijMag2 = platform->device.malloc<dfloat>(nrs->fieldOffset);
     desLenScaleKernel(mesh->Nelements,
@@ -430,6 +438,7 @@ void RANSktau::setup(int ifld, std::string &modelIn)
   nrs_t *_nrs = dynamic_cast<nrs_t *>(platform->solver);
   auto mesh = _nrs->mesh;
   
+  //default to using cheap_dist if ywd array not provided
   if(model != "KTAU") {
     for (auto &[key, bcID] : bcMap::map()) {
       const auto field = key.first;

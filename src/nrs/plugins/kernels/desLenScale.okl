@@ -7,11 +7,11 @@ void rmin(dfloat *s_min, const dlong t, const dlong bs) {
 }
 
 @kernel void desLenScale(const dlong Nelements,
-                       const dlong offset,
-                       @ restrict const dfloat *x,
-                       @ restrict const dfloat *y,
-                       @ restrict const dfloat *z,
-                       @ restrict dfloat *dgrd)
+			 const dlong offset,
+			 @ restrict const dfloat *x,
+			 @ restrict const dfloat *y,
+			 @ restrict const dfloat *z,
+			 @ restrict dfloat *dgrd)
 {
   for (dlong e = 0; e < Nelements; e++; @outer(0)) {
     const dlong Nblocks = (p_Np + p_blockSize - 1)/p_blockSize;
@@ -172,5 +172,3 @@ void rmin(dfloat *s_min, const dlong t, const dlong bs) {
     }
   }
 }
-  
-
