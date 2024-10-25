@@ -1,23 +1,3 @@
-C-----------------------------------------------------------------------
-      subroutine useric(ix,iy,iz,ieg) ! set up initial conditions
-      include 'SIZE'
-      include 'TOTAL'
-      include 'NEKUSE'
-
-      ux   = 1.0
-      uy   = 0.0
-      uz   = 0.0
-
-      if(ifield.eq.2)then
-        temp = 1.0
-      elseif(ifield.eq.3)then
-        temp = 0.01
-      elseif(ifield.eq.4)then
-        temp = 0.1
-      endif
-
-      return
-      end
 c-----------------------------------------------------------------------
       subroutine userchk()
       include 'SIZE'
@@ -94,8 +74,39 @@ c     Transform box mesh to periodic hill (only for the conforming mesh!!)
       end
 c-----------------------------------------------------------------------
       subroutine usrdat3()
+      implicit none
       include 'SIZE'
       include 'TOTAL'
+
+      integer npt
+      parameter (npt=201)
+
+      common /pts/ xp(npt),yp(npt),zp(npt) 
+      real xp,yp,zp
+      
+      real xmin,xmax,ymin,deltax,glmin,glmax,hill_height
+      real yscale, yh
+      integer ntot,i
+
+      common /hill_param/ Lx, Ly, Lz, Wh, H, Betax, Betay
+      real Lx, Ly, Lz, Wh, H, Betax, Betay
+
+      !generate pts on lower wall for plotting
+      ntot = lx1*ly1*lz1*nelt
+      xmin = glmin(xm1,ntot)
+      xmax = glmax(xm1,ntot)
+      ymin = glmax(ym1,ntot)
+
+      deltax = (xmax-xmin)/(npt-1)
+      do i=1,npt
+        xp(i) = xmin + (i-1)*deltax
+        yh = hill_height(xp(i),Lx,Wh,H)
+        yp(i) = yh
+        zp(i) = 0.0
+      enddo
+      call nekrs_registerPtr('xp',xp)
+      call nekrs_registerPtr('yp',yp)
+      call nekrs_registerPtr('zp',zp)
 
       return
       end

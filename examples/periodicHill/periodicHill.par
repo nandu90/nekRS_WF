@@ -1,9 +1,9 @@
 [GENERAL]
-polynomialOrder = 3
-startFrom = "des.fld"+time=0
+polynomialOrder = 5
+#startFrom = "sst.fld"+time=0
 stopAt = endTime
 endTime = 100
-dt = 5e-03
+dt = targetCFL=1.0+initial=1e-03
 timeStepper = tombo2
 
 checkpointControl = simulationTime 
@@ -23,17 +23,10 @@ residualTol = 1e-06
 density = 1.0
 viscosity = -10595. 
 
-[SCALAR00]
-#solver = none
-boundaryTypeMap = inlet, inlet
-residualTol = 1e-06
-rho = 1.0
-diffusivity = -10595. 
-
-[SCALAR01] # k
+[SCALAR00] # k
 boundaryTypeMap = inlet, inlet 
-residualTol = 1e-08
+residualTol = 1e-05
 
-[SCALAR02] # tau
+[SCALAR01] # tau
 boundaryTypeMap = inlet, inlet
 residualTol = 1e-06

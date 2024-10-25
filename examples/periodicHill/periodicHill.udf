@@ -2,7 +2,6 @@
 #include "tavg.hpp"
 
 static dfloat rho, mueLam;
-occa::memory o_ywd;
 
 #include "ci.inc"
 
@@ -24,24 +23,6 @@ void uservp(double time)
   auto cds = nrs->cds;
 
   RANSktau::updateProperties();
-
-  dfloat conductivity;
-  platform->options.getArgs("SCALAR00 DIFFUSIVITY", conductivity);
-  const dfloat Pr_t = 0.7;
-  auto o_mue_t = RANSktau::o_mue_t();
-  auto o_temp_mue = cds->o_diff + 0 * cds->fieldOffset[0];
-  scalarScaledAdd(mesh->Nlocal, conductivity, 1 / Pr_t, o_mue_t, o_temp_mue);
-}
-
-void UDF_LoadKernels(deviceKernelProperties& kernelInfo)
-{
-#if 0
-  {
-    auto props = kernelInfo;
-    props.define("p_sigma_k") = 0.6;
-    RANSktau::buildKernel(props);
-  }
-#endif
 }
 
 void UDF_Setup0(MPI_Comm comm, setupAide &options)
@@ -60,47 +41,55 @@ void UDF_Setup()
   nrs->userProperties = &uservp;
   nrs->userScalarSource = &userq;
 
-  const int scalarFieldStart = 1;
-  platform->options.getArgs("VISCOSITY", mueLam);
-  platform->options.getArgs("DENSITY", rho);
+  const int kFieldIndex = 0;
 
-  std::vector<int> bidWall = {1,2};
-  occa::memory o_bidWall = platform->device.malloc<int>(bidWall.size(), bidWall.data());
-  o_ywd = mesh->minDistance(bidWall.size(), o_bidWall, "cheap");
+  std::string model = "sst";
+	if(ciMode == 2) model = "sst+ddes";
+	if(ciMode == 3) model = "sst+iddes";
+  RANSktau::setup(kFieldIndex, model);
 
-  std::string model = "sst+des";
-  RANSktau::setup(scalarFieldStart,model,o_ywd);
+	//Initial Conditions
+	std::vector<dfloat> U(mesh->dim * nrs->fieldOffset, 0.0);
+	std::vector<dfloat> k(mesh->Nlocal, 0.0);
+	std::vector<dfloat> tau(mesh->Nlocal, 0.0);
 
-	/* if(ciMode) { */
-  std::vector< std::vector<deviceMemory<dfloat>> > tavgFields;
-  
-  deviceMemory<dfloat> o_u(nrs->o_U.slice(0 * nrs->fieldOffset , nrs->fieldOffset));
-  deviceMemory<dfloat> o_v(nrs->o_U.slice(1 * nrs->fieldOffset , nrs->fieldOffset));
-  deviceMemory<dfloat> o_w(nrs->o_U.slice(2 * nrs->fieldOffset , nrs->fieldOffset));
-  deviceMemory<dfloat> o_k(cds->o_S.slice(1 * nrs->fieldOffset , nrs->fieldOffset));
-  deviceMemory<dfloat> o_tau(cds->o_S.slice(2 * nrs->fieldOffset , nrs->fieldOffset));
-  
-  tavgFields.push_back({o_u});
-  tavgFields.push_back({o_v});
-  tavgFields.push_back({o_w});
-  tavgFields.push_back({o_k});
-  tavgFields.push_back({o_tau});
-  
-  tavg::setup(nrs->fieldOffset,tavgFields);
-	/* } */
+	if (platform->options.getArgs("RESTART FILE NAME").empty()) {
+		for(int n = 0; n < mesh->Nlocal; n++) {
+			U[n + 0 * nrs->fieldOffset] = 1;
+			U[n + 1 * nrs->fieldOffset] = 0;
+			U[n + 2 * nrs->fieldOffset] = 0;
+			k[n + cds->fieldOffsetScan[kFieldIndex]] = 0.01; 
+			tau[n + cds->fieldOffsetScan[kFieldIndex+1]] = 0.1;
+		}
+		nrs->o_U.copyFrom(U.data(), U.size());
+		nrs->cds->o_S.copyFrom(k.data(), k.size(), cds->fieldOffsetScan[kFieldIndex]); 
+		nrs->cds->o_S.copyFrom(tau.data(), tau.size(), cds->fieldOffsetScan[kFieldIndex + 1]); 
+	}
+
+	if(ciMode) {
+		std::vector< std::vector<deviceMemory<dfloat>> > tavgFields;
+
+		deviceMemory<dfloat> o_u(nrs->o_U.slice(0 * nrs->fieldOffset , nrs->fieldOffset));
+		deviceMemory<dfloat> o_v(nrs->o_U.slice(1 * nrs->fieldOffset , nrs->fieldOffset));
+		deviceMemory<dfloat> o_w(nrs->o_U.slice(2 * nrs->fieldOffset , nrs->fieldOffset));
+		deviceMemory<dfloat> o_k(cds->o_S.slice(0 * nrs->fieldOffset , nrs->fieldOffset));
+		deviceMemory<dfloat> o_tau(cds->o_S.slice(1 * nrs->fieldOffset , nrs->fieldOffset));
+
+		tavgFields.push_back({o_u});
+		tavgFields.push_back({o_v});
+		tavgFields.push_back({o_w});
+		tavgFields.push_back({o_k});
+		tavgFields.push_back({o_tau});
+
+		tavg::setup(nrs->fieldOffset, tavgFields);
+	}
 }
 
 void UDF_ExecuteStep(double time, int tstep)
 {
-
-	/* if(ciMode){ */
-  tavg::run(time);
-  
-  auto o_avg = tavg::o_avg();
-  /* ciTestErrors(nrs, time, tstep, o_avg); */
-  
-  //if(nrs->isCheckpointStep) tavg::outfld();
-  
-  /* } */
-  //if(nrs->isCheckpointStep) nek::userchk();
+	if(ciMode){
+		tavg::run(time);
+		auto o_avg = tavg::o_avg();
+		ciTestErrors(nrs, time, tstep, o_avg);
+	}
 }
